@@ -40,7 +40,7 @@
           uid = profile.userId;
         } else {
           console.warn('LIFF 未登入，嘗試獲取假性 userId 進行測試。');
-          uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b'; // <-- 這裡可以放您試算表中現有的 LINE ID 進行測試
+          uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b'; // <-- 這裡可以放您試算表中現有的 LINE ID 進行
           document.getElementById('list').innerHTML = `<div class="error">LIFF 登入失敗或不在 LINE 環境中。使用測試ID: ${uid}</div>`;
         }
       } catch (e) {
