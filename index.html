@@ -15,12 +15,6 @@
     video { width:100%; max-width:420px; border-radius:12px; display:none; margin-top:20px }
     input { width:80%; max-width:320px; padding:10px; margin:6px 0; border-radius:6px; border:none; font-size:1em }
     #msg { margin:18px 0 8px; font-size:1.4em; font-weight:bold }
-    /* 新增顯示試算表 ID 的樣式 */
-    #sheetId {
-      margin:24px 0 12px;
-      font-size:0.9em;
-      color:#ccc;
-    }
   </style>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
@@ -40,122 +34,120 @@
            src="https://aiwe.cc/wp-content/uploads/2025/07/56ab24c15b72a457069c5ea42fcfc640.mp3"></audio>
   <audio id="loseSound" preload="auto"
            src="https://aiwe.cc/wp-content/uploads/2025/07/b3a7a4e64bcd8aabe4cabe0e55b57af5.mp3"></audio>
-
 <script>
-// LIFF / API / 試算表 ID
-const LIFF_ID  = "1656871455-A1lEEOaB"; 
-const API      = "https://lihi2.com/Njlih"; 
+// **請務必將此處的 LIFF_ID 替換為您的 LINE LIFF ID**
+const LIFF_ID = "1656871455-A1lEEOaB"; 
+
+// **重要：請務必將此處的 API 網址替換為您最新部署 Apps Script 時獲取到的「網路應用程式網址」**
+const API     = "https://lihi2.com/Njlih"; 
+
 let uid="", uname="";
-const btnPlay  = document.getElementById("play"),
-      mv       = document.getElementById("mv"),
-      msg      = document.getElementById("msg"),
-      form     = document.getElementById("form"),
-      inName   = document.getElementById("username"),
-      inPhone  = document.getElementById("phone"),
-      btnSend  = document.getElementById("submit"),
-      winSound = document.getElementById("winSound"),
-      loseSound= document.getElementById("loseSound");
+const btnPlay=document.getElementById("play"),
+      mv=document.getElementById("mv"),
+      msg=document.getElementById("msg"),
+      form=document.getElementById("form"),
+      inName=document.getElementById("username"),
+      inPhone=document.getElementById("phone"),
+      btnSend=document.getElementById("submit"),
+      winSound=document.getElementById("winSound"),
+      loseSound=document.getElementById("loseSound");
 
 (async()=>{
-  await liff.init({ liffId: LIFF_ID });
-  if(!liff.isLoggedIn()){
-    liff.login();
-    return;
+  await liff.init({liffId:LIFF_ID});
+  if(!liff.isLoggedIn()){ 
+    liff.login(); 
+    return; 
   }
-  const profile = await liff.getProfile();
-  uid   = profile.userId;
-  uname = profile.displayName;
-
-  // 啟用「開始遊戲」按鈕
-  btnPlay.disabled = false;
-  btnPlay.textContent = "開始遊戲";
-
-  // 顯示當前使用的試算表 ID
-  const sheetInfo = document.createElement("div");
-  sheetInfo.id = "sheetId";
-  sheetInfo.textContent = "工作表 ID: " + SHEET_ID;
-  document.body.appendChild(sheetInfo);
+  const profile=await liff.getProfile();
+  uid=profile.userId;
+  uname=profile.displayName;
+  btnPlay.disabled=false;
+  btnPlay.textContent="開始遊戲";
 })();
 
-// 播放動畫、決定中獎
-btnPlay.onclick = () => {
-  winSound.load();
-  loseSound.load();
-  btnPlay.style.display = "none";
-  msg.textContent = "";
-  mv.style.display = "block";
-  mv.currentTime = 0;
+btnPlay.onclick=()=>{
+  winSound.load(); loseSound.load();
+  btnPlay.style.display="none";
+  msg.textContent="";
+  mv.style.display="block";
+  mv.currentTime=0;
   mv.play();
-  setTimeout(() => mv.pause(), 7000);
+  setTimeout(()=>mv.pause(),7000); // 影片播放 7 秒後暫停
 };
 
-// 動畫結束後
-mv.onpause = async () => {
-  mv.style.display = "none";
-  const win = Math.random() < 0.5;
-  msg.textContent = win ? "🎊 恭喜中獎！" : "😭 再接再厲！";
-
-  // 記錄抽獎結果
-  fetch(API, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type":"text/plain" },
-    body: JSON.stringify({
-      act: "draw",
-      userId: uid,
-      username: uname,
-      status: win ? "WIN" : "MISS",
-      time: new Date().toISOString()
-    })
+mv.onpause=async ()=>{
+  mv.style.display="none";
+  const win=Math.random()<0.5; // 50% 機率中獎
+  msg.textContent=win?"🎊 恭喜中獎！":"😭 再接再厲！";
+  
+  // 保持 mode:"no-cors" 如您所要求
+  // 前端發送抽獎結果到後端
+  fetch(API,{
+    method:"POST", 
+    mode:"no-cors", // 保持 no-cors
+    headers:{"Content-Type":"text/plain"}, // 保持 text/plain
+    body:JSON.stringify({act:"draw",userId:uid,displayName:uname,result:win?"WIN":"MISS"})
+  }).catch(e => { // 簡單的錯誤捕獲，僅用於日誌
+      console.error("發送抽獎紀錄失敗:", e);
   });
-
+  
   if(win){
     try{ await winSound.play(); }catch(_){}
-    form.style.display = "block";
-    inName.value = uname;
-    btnSend.style.display = "block";
+    form.style.display="block"; // 顯示表單
+    inName.value=uname; // 預填 LINE 名稱
+    btnSend.style.display="block"; // 顯示送出按鈕
   } else {
     try{ await loseSound.play(); }catch(_){}
-    setTimeout(() => liff.closeWindow(), 2000);
+    // 如果沒有中獎，2 秒後自動關閉 LIFF 視窗 (可選，您可以移除或調整時間)
+    setTimeout(() => {
+        liff.closeWindow();
+    }, 2000); 
   }
 };
 
-// 送出中獎人資料
-btnSend.onclick = () => {
-  if(!inName.value.trim()){ alert("請填寫姓名"); return; }
-  if(!inPhone.value.trim()){ alert("請填寫手機號碼"); return; }
+btnSend.onclick=()=>{
+  if(!inName.value.trim()){
+    alert("請填寫姓名");
+    return;
+  }
+  if(!inPhone.value.trim()){
+    alert("請填寫手機號碼");
+    return;
+  }
 
-  btnSend.disabled = true;
-  btnSend.innerText = "送出中…";
-  btnSend.style.background = "#555";
+  btnSend.disabled=true; // 防止重複點擊
+  btnSend.innerText="送出中…";
+  btnSend.style.background="#555"; // 按鈕變灰
 
-  fetch(API, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type":"text/plain" },
-    body: JSON.stringify({
-      act:        "winner",
-      userId:     uid,
-      username:   uname,
-      name:       inName.value.trim(),
-      phone:      inPhone.value.trim()
-      // prize, storeName…都留給後端決定
+  // 保持 mode:"no-cors" 如您所要求
+  // **重點：這裡已移除 prize:"預設獎項"**
+  fetch(API,{
+    method:"POST", 
+    mode:"no-cors", // 保持 no-cors
+    headers:{"Content-Type":"text/plain"}, // 保持 text/plain
+    body:JSON.stringify({
+      act:"winner",
+      userId:uid,
+      displayName:uname,
+      // prize:"預設獎項", // <-- 這一行已被移除，獎品名稱將由後端決定並寫入試算表
+      name:inName.value.trim(),
+      phone:inPhone.value.trim()
     })
-  })
-  .then(()=>{
-    msg.textContent = "✅ 資料已送出！感謝您的填寫！";
-    btnSend.disabled = false;
-    btnSend.style.background = "#fff";
-    btnSend.style.color = "#000";
-    btnSend.innerText = "點右上角 X 返回";
-    btnSend.onclick = () => liff.closeWindow();
-  })
-  .catch(e=>{
-    alert("送出失敗：網路問題或伺服器錯誤。\n"+e.message);
-    console.error("提交資料失敗:", e);
-    btnSend.disabled = false;
-    btnSend.innerText = "重新送出";
-    btnSend.style.background = "#ffc107";
+  }).then(()=>{
+    // 注意：由於 mode:"no-cors"，此處無法從後端讀取 JSON 響應內容
+    // 因此前端無法顯示後端選定的具體獎品名稱。
+    msg.textContent="✅ 資料已送出！感謝您的填寫！";
+    btnSend.disabled=false;
+    btnSend.style.background="#fff";
+    btnSend.style.color="#000";
+    btnSend.innerText="點右上角 X 返回";
+    btnSend.onclick=()=>liff.closeWindow(); // 點擊按鈕關閉視窗
+  }).catch((e)=>{
+    alert("送出失敗：網路問題或伺服器錯誤。\n" + e.message); // 顯示錯誤訊息
+    console.error("提交資料失敗:", e); // 將錯誤輸出到控制台，方便除錯
+    btnSend.disabled=false;
+    btnSend.innerText="重新送出";
+    btnSend.style.background="#ffc107";
   });
 };
 </script>
