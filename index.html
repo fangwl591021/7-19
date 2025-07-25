@@ -84,7 +84,7 @@ mv.onpause=async ()=>{
   // 前端發送抽獎結果到後端
   fetch(API,{
     method:"POST", 
-    mode:"no-cors", // 保持 no-cors
+    
     headers:{"Content-Type":"text/plain"}, // 保持 text/plain
     body:JSON.stringify({act:"draw",userId:uid,displayName:uname,result:win?"WIN":"MISS"})
   }).catch(e => { // 簡單的錯誤捕獲，僅用於日誌
