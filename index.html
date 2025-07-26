@@ -22,7 +22,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body>
-  <h1>🎰 轉轉小瑪莉</h1>
+  <h1>🎰 好禮大方抽</h1>
   <div class="welcome" id="welcomeMsg">載入中...</div>
   <button id="play" disabled>載入中…</button>
   
@@ -115,7 +115,7 @@ async function initializeLiff() {
     console.log('用戶資料:', { uid: uid, uname: uname });
     
     // 🔥 顯示歡迎訊息
-    welcomeMsg.textContent = `Hi ${uname}，歡迎來玩轉轉小瑪莉！`;
+    welcomeMsg.textContent = `Hi ${uname}，歡迎來玩好禮大方抽！`;
     
     // 🔥 直接允許遊戲，不做任何檢查
     btnPlay.textContent = "開始遊戲";
