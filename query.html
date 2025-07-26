@@ -11,66 +11,13 @@
     .card { background:#333; padding:12px; margin:12px 0; border-radius:8px; }
     .card h3 { margin:0 0 8px; color:#fff; }
     .info { font-size:.9em; line-height:1.4; }
-    .expiry-date { color: #ff5555; font-weight: bold; }
-    .expiry-date.valid { color: #55ff55; }
+    .expiry-date { color: #ff5555; font-weight: bold; } /* 紅字樣式 */
     .redeemBtn { width:100%; padding:10px; margin-top:8px; border:none; border-radius:6px;
-                 background:#ffc107; color:#000; font-size:1em; cursor:pointer; }
-    .redeemBtn.done   { background:#666; color:#bbb; cursor:not-allowed; }
-    .redeemBtn.expired{ background:#dc3545; color:#fff; cursor:not-allowed; }
-    .redeemBtn.loading{ background:#007bff; color:#fff; cursor:wait; }
+                 background:#ffc107; color:#000; font-size:1em; }
+    .redeemBtn.done { background:#666; color:#bbb; cursor:not-allowed; } /* 已核銷按鈕樣式 */
+    .redeemBtn.expired { background:#dc3545; color:#fff; cursor:not-allowed; } /* 過期按鈕樣式 */
     .back { position:fixed; top:12px; left:12px; background:#007bff; color:#fff;
             border:none; padding:8px 12px; border-radius:5px; }
-    
-    /* 通知樣式 */
-    .notification {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 15px 20px;
-      border-radius: 8px;
-      color: white;
-      font-weight: bold;
-      z-index: 1000;
-      transform: translateX(400px);
-      transition: transform 0.3s ease;
-    }
-    .notification.show {
-      transform: translateX(0);
-    }
-    .notification.success {
-      background: #27ae60;
-    }
-    .notification.error {
-      background: #e74c3c;
-    }
-    
-    /* 載入動畫 */
-    .spinner {
-      border: 2px solid #f3f3f3;
-      border-top: 2px solid #3498db;
-      border-radius: 50%;
-      width: 20px;
-      height: 20px;
-      animation: spin 1s linear infinite;
-      display: inline-block;
-      margin-right: 8px;
-    }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* 除錯資訊樣式 */
-    .debug-info {
-      background: #222;
-      border: 1px solid #444;
-      padding: 10px;
-      margin: 10px 0;
-      border-radius: 4px;
-      font-size: 0.8em;
-      color: #ccc;
-    }
   </style>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
@@ -80,414 +27,187 @@
   <div id="list"><div class="loading">載入中…</div></div>
 
   <script>
-    const LIFF_ID = '1656871455-Np5YYVlv';
-    // *** 重要：使用與抽獎頁面相同的 API 網址 ***
-    const API = 'https://script.google.com/macros/s/AKfycbx6ioY0veJL_Pwxda93MsWux5jGN4wviU4JoCKuST7tXvsXmMUOhResWTDQxxJVtHOn/exec';
-
-    let debugMode = true; // 開啟除錯模式
-
-    function debugLog(message, data = null) {
-      if (debugMode) {
-        console.log(`[DEBUG] ${message}`, data);
-        
-        // 也顯示在頁面上
-        const debugDiv = document.getElementById('debug-info') || createDebugDiv();
-        const time = new Date().toLocaleTimeString();
-        debugDiv.innerHTML += `<div>[${time}] ${message} ${data ? JSON.stringify(data) : ''}</div>`;
-        debugDiv.scrollTop = debugDiv.scrollHeight;
-      }
-    }
-
-    function createDebugDiv() {
-      const debugDiv = document.createElement('div');
-      debugDiv.id = 'debug-info';
-      debugDiv.className = 'debug-info';
-      debugDiv.innerHTML = '<strong>除錯資訊：</strong><br>';
-      debugDiv.style.maxHeight = '200px';
-      debugDiv.style.overflow = 'auto';
-      document.body.appendChild(debugDiv);
-      return debugDiv;
-    }
+    const LIFF_ID = '1656871455-Np5YYVlv'; // 您的 LIFF ID
+    const API     = 'https://script.google.com/macros/s/AKfycbx6ioY0veJL_Pwxda93MsWux5jGN4wviU4JoCKuST7tXvsXmMUOhResWTDQxxJVtHOn/exec'; // <-- 請更新為您 Apps Script 的 API 網址
 
     async function init() {
-      debugLog('開始初始化');
+      await liff.init({ liffId: LIFF_ID });
       
       let uid;
-      
       try {
-        // 嘗試 LIFF 初始化
-        await liff.init({ liffId: LIFF_ID });
-        debugLog('LIFF 初始化成功');
-        
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
           uid = profile.userId;
-          debugLog('取得用戶 ID', { uid: uid.substring(0, 10) + '...' });
         } else {
-          debugLog('LIFF 未登入');
-          uid = null;
+          console.warn('LIFF 未登入，嘗試獲取假性 userId 進行測試。');
+          uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b'; // <-- 這裡可以放您試算表中現有的 LINE ID 進
+          document.getElementById('list').innerHTML = `<div class="error">LIFF 登入失敗或不在 LINE 環境中。使用測試ID: ${uid}</div>`;
         }
-        
-      } catch (error) {
-        debugLog('LIFF 初始化失敗', { 
-          name: error.name, 
-          message: error.message, 
-          stack: error.stack 
-        });
-        
-        // LIFF 失敗時使用備用方案
-        uid = null;
+      } catch (e) {
+        console.error("無法獲取 LIFF 用戶資料:", e);
+        uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b'; // 備用測試 ID
+        document.getElementById('list').innerHTML = `<div class="error">獲取用戶ID失敗：${e.message}。使用測試ID: ${uid}</div>`;
       }
       
-      // 如果沒有取得用戶 ID，使用測試模式
-      if (!uid) {
-        debugLog('使用測試模式');
-        // 使用實際有記錄的用戶 ID
-        uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b';
-        showNotification('使用測試模式（Tonyfang）', 'error');
+      if (uid) {
+        loadRecords(uid);
+      } else {
+        document.getElementById('list').innerHTML = `<div class="error">無法獲取用戶ID，請確認 LIFF 設定。</div>`;
       }
-      
-      // 開始載入記錄
-      loadRecords(uid);
     }
 
     async function loadRecords(uid) {
-      debugLog('開始載入記錄', { uid });
-      
       const list = document.getElementById('list');
-      list.innerHTML = '<div class="loading"><div class="spinner"></div>載入中…</div>';
-      
+      list.innerHTML = '<div class="loading">載入中…</div>';
       try {
-        // 嘗試 JSONP 方式
-        const callbackName = 'jsonp_callback_' + Date.now();
-        const url = `${API}?act=query&userId=${encodeURIComponent(uid)}&callback=${callbackName}`;
-        debugLog('嘗試 JSONP 請求', { url });
-        
-        return new Promise((resolve, reject) => {
-          // 設定超時
-          const timeout = setTimeout(() => {
-            cleanup();
-            reject(new Error('請求超時'));
-          }, 10000);
-          
-          // 設定全域回調函數
-          window[callbackName] = function(data) {
-            cleanup();
-            debugLog('JSONP 回應', data);
-            
-            if (!data.ok) {
-              reject(new Error(data.msg || '後端錯誤'));
-              return;
-            }
-            
-            debugLog('記錄載入成功', { recordCount: data.records.length });
-            render(data.records);
-            resolve();
-          };
-          
-          // 清理函數
-          function cleanup() {
-            clearTimeout(timeout);
-            if (window[callbackName]) {
-              delete window[callbackName];
-            }
-            const script = document.getElementById(callbackName);
-            if (script) {
-              script.remove();
-            }
-          }
-          
-          // 創建 script 標籤
-          const script = document.createElement('script');
-          script.id = callbackName;
-          script.src = url;
-          script.onerror = function() {
-            cleanup();
-            reject(new Error('JSONP 請求失敗'));
-          };
-          
-          document.head.appendChild(script);
+        // *** 關鍵修改：發送查詢請求時，帶上 act=query 參數 ***
+        const res = await fetch(`${API}?act=query&userId=${uid}`, { 
+          method: 'GET', 
+          mode: 'cors' 
         });
+
+        if (!res.ok) {
+            console.error("HTTP 錯誤狀態:", res.status);
+            throw new Error(`HTTP 錯誤 ${res.status}`);
+        }
         
+        const j = await res.json();
+        console.log("後端返回數據:", j); 
+
+        if (!j.ok) {
+            throw new Error(j.msg || '後端返回錯誤');
+        }
+        render(j.records); 
       } catch(err) {
-        debugLog('載入記錄失敗', { error: err.message, stack: err.stack });
-        console.error('載入記錄失敗:', err);
-        
-        // 如果 JSONP 也失敗，嘗試直接 fetch 但忽略 CORS 錯誤
-        try {
-          debugLog('嘗試備用方案：iframe 方式');
-          await loadRecordsViaIframe(uid);
-        } catch (backupError) {
-          debugLog('備用方案也失敗', backupError);
-          
-          let errorMessage = '讀取失敗';
-          if (err.message.includes('請求超時')) {
-            errorMessage = 'API 回應超時，請檢查網路連線';
-          } else if (err.message.includes('JSONP')) {
-            errorMessage = 'JSONP 請求失敗，可能是 API 不支援';
-          } else {
-            errorMessage = `讀取失敗：${err.message}`;
-          }
-          
-          list.innerHTML = `
-            <div class="error">
-              ${errorMessage}<br>
-              <button onclick="location.reload()" style="margin-top:10px;padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;">重新載入</button>
-              <button onclick="testAPI()" style="margin-top:10px;margin-left:10px;padding:8px 16px;background:#28a745;color:white;border:none;border-radius:4px;">測試 API</button>
-            </div>`;
-        }
+        console.error("載入紀錄失敗:", err); 
+        list.innerHTML = `<div class="error">讀取失敗：${err.message}</div>`;
       }
     }
 
-    // 備用方案：使用 iframe
-    async function loadRecordsViaIframe(uid) {
-      return new Promise((resolve, reject) => {
-        debugLog('使用 iframe 方式載入');
-        
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = `${API}?act=query&userId=${encodeURIComponent(uid)}`;
-        
-        const timeout = setTimeout(() => {
-          iframe.remove();
-          reject(new Error('iframe 載入超時'));
-        }, 10000);
-        
-        iframe.onload = function() {
-          clearTimeout(timeout);
-          try {
-            // 嘗試讀取 iframe 內容
-            const doc = iframe.contentDocument || iframe.contentWindow.document;
-            const text = doc.body.textContent || doc.body.innerText;
-            debugLog('iframe 回應內容', text);
-            
-            const data = JSON.parse(text);
-            if (data.ok) {
-              render(data.records);
-              resolve();
-            } else {
-              reject(new Error(data.msg || 'iframe 方式失敗'));
-            }
-          } catch (e) {
-            reject(new Error('無法解析 iframe 回應'));
-          } finally {
-            iframe.remove();
-          }
-        };
-        
-        iframe.onerror = function() {
-          clearTimeout(timeout);
-          iframe.remove();
-          reject(new Error('iframe 載入錯誤'));
-        };
-        
-        document.body.appendChild(iframe);
-      });
-    }
-
-    // API 測試函數
-    async function testAPI() {
-      debugLog('開始 API 測試');
-      
-      try {
-        const testUrl = `${API}?act=query&userId=test_write_001`;
-        debugLog('測試 URL', testUrl);
-        
-        const response = await fetch(testUrl, {
-          method: 'GET',
-          mode: 'cors'
-        });
-        
-        debugLog('API 測試回應', {
-          status: response.status,
-          statusText: response.statusText
-        });
-        
-        const text = await response.text();
-        debugLog('API 測試內容', text);
-        
-        showNotification('API 測試完成，請查看除錯資訊', 'success');
-        
-      } catch (error) {
-        debugLog('API 測試失敗', error);
-        showNotification('API 測試失敗', 'error');
-      }
-    }
-
-    function parseExpiryDate(dateString) {
-      if (!dateString || dateString === '過期日期錯誤') return null;
-      
-      dateString = dateString.toString().trim();
-      
-      const formats = [
-        dateString,
-        dateString + 'T23:59:59.999Z',
-        dateString + 'T00:00:00.000Z'
-      ];
-      
-      for (const format of formats) {
-        const date = new Date(format);
-        if (!isNaN(date.getTime())) {
-          return date;
-        }
-      }
-      
-      const match = dateString.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-      if (match) {
-        const year = parseInt(match[1]);
-        const month = parseInt(match[2]) - 1;
-        const day = parseInt(match[3]);
-        return new Date(year, month, day, 23, 59, 59);
-      }
-      
-      debugLog('無法解析日期', dateString);
-      return null;
-    }
-
+    // 新增日期格式化函數，用於顯示日期部分
     function formatDateDisplay(date) {
-      if (!date) return '無過期時間';
-      return date.toISOString().slice(0,10);
+        if (!date) return '';
+        if (typeof date === 'string') {
+            date = new Date(date.replace(/-/g, '/')); // 嘗試解析字串
+        }
+        if (isNaN(date.getTime())) return '無效日期'; // 如果是無效日期，顯示明確提示
+
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        return `${year}-${month}-${day}`;
     }
 
     function render(arr) {
-      debugLog('開始渲染記錄', { count: arr.length });
-      
       const list = document.getElementById('list');
       if (!arr || !arr.length) {
         list.innerHTML = '<p class="loading">尚無中獎紀錄</p>';
         return;
       }
       
-      const now = new Date();
+      const now = new Date(); // 獲取當前時間，用於判斷是否過期
+
+      console.log('渲染數據:', arr); 
+
       list.innerHTML = arr.map(o => {
-        debugLog('渲染記錄項目', o);
-        
+        console.log('處理單條紀錄:', o); 
+
         let isExpired = false;
-        let expDisp = '無過期時間';
-        let expClass = 'expiry-date valid';
+        let expiryDisplay = '無過期時間'; // 預設值，如果 o.expiryTime 不存在或無效
         
+        // *** 這裡直接使用後端傳來的 o.expiryTime 進行顯示和判斷 ***
         if (o.expiryTime) {
-          const expiryDate = parseExpiryDate(o.expiryTime);
-          if (expiryDate) {
-            expDisp = formatDateDisplay(expiryDate);
-            if (expiryDate < now) {
-              isExpired = true;
-              expClass = 'expiry-date';
+            console.log('原始過期時間字串:', o.expiryTime); 
+            const expiryDateObj = new Date(String(o.expiryTime).replace(/-/g, '/')); 
+            console.log('解析後的過期時間物件:', expiryDateObj, '是否有效:', isNaN(expiryDateObj.getTime())); 
+
+            if (!isNaN(expiryDateObj.getTime())) {
+                expiryDisplay = formatDateDisplay(expiryDateObj); // 格式化為 YYYY-MM-DD 顯示
+                if (expiryDateObj < now) { // 如果過期時間早於當前時間，則已過期
+                    isExpired = true;
+                }
+            } else {
+                expiryDisplay = '過期日期格式錯誤'; // 如果解析失敗，顯示明確提示
             }
-          } else {
-            expDisp = '日期格式錯誤';
-            expClass = 'expiry-date';
-          }
         }
-        
-        let btnHtml;
+
+        const redeemedText = o.redeemed === '是' ? '已核銷' : '未核銷';
+        let buttonHtml;
         if (o.redeemed === '是') {
-          btnHtml = `<button class="redeemBtn done" disabled>已核銷<br>${o.redeemTime || '時間未知'}</button>`;
+          buttonHtml = `<button class="redeemBtn done" disabled>已核銷<br>${o.redeemTime}</button>`;
         } else if (isExpired) {
-          btnHtml = `<button class="redeemBtn expired" disabled>已過期</button>`;
+          buttonHtml = `<button class="redeemBtn expired" disabled>已過期</button>`;
         } else {
-          btnHtml = `<button class="redeemBtn" onclick="redeem(${o.recordId}, this)">核銷</button>`;
+          buttonHtml = `<button class="redeemBtn" onclick="redeem(${o.recordId}, this)">核銷</button>`;
         }
-        
+
         return `
           <div class="card" id="c${o.recordId}">
-            <h3>${o.prize || '未知獎品'}</h3>
+            <h3>${o.prize}</h3>
             <div class="info">
               店家名稱：${o.storeName || 'N/A'}<br>
               中獎時間：${o.winTime || 'N/A'}<br>
-              過期時間：<span class="${expClass}">${expDisp}</span><br>
-              核銷狀態：${o.redeemed === '是' ? '已核銷' : '未核銷'}<br>
-              ${o.redeemed === '是' ? `核銷時間：${o.redeemTime || '時間未知'}<br>` : ''}
+              過期時間：<span class="expiry-date">${expiryDisplay}</span><br>
+              核銷狀態：${redeemedText}<br>
+              ${o.redeemed === '是' ? `核銷時間：${o.redeemTime || 'N/A'}<br>` : ''}
             </div>
-            ${btnHtml}
+            ${buttonHtml}
           </div>`;
       }).join('');
+
+      if (arr.length === 0 && list.innerHTML.includes('<div class="loading">')) {
+          list.innerHTML = '<p class="loading">尚無中獎紀錄</p>';
+      }
     }
 
     async function redeem(recordId, btn) {
-      if (btn.disabled) return;
-      
-      debugLog('開始核銷', { recordId });
-      
-      btn.disabled = true;
-      btn.className = 'redeemBtn loading';
-      btn.innerHTML = '<div class="spinner"></div>處理中…';
-      
+      btn.disabled = true; 
+      btn.textContent='處理中…';
       try {
-        const response = await fetch(API, {
-          method: 'POST',
-          mode: 'no-cors', // 改為 no-cors 避免 CORS 問題
-          headers: {
-            'Content-Type': 'text/plain' // 改為 text/plain
-          },
-          body: JSON.stringify({ 
-            act: 'redeem', 
-            recordId: recordId
-          })
+        const res = await fetch(API, {
+          method:'POST', 
+          mode:'cors',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ act:'redeem', recordId: recordId }) 
         });
         
-        debugLog('核銷回應', { status: response.status });
-        
-        // 由於 no-cors 模式無法讀取回應，假設成功
-        updateUIAfterRedeem(recordId, btn);
-        showNotification('核銷成功！', 'success');
-        
-      } catch (error) {
-        debugLog('核銷失敗', error);
-        
-        btn.disabled = false;
-        btn.className = 'redeemBtn';
-        btn.innerHTML = '核銷';
-        
-        showNotification(`核銷失敗：${error.message}`, 'error');
-      }
-    }
+        const j = await res.json();
+        console.log("核銷後端返回數據:", j); 
 
-    function updateUIAfterRedeem(recordId, btn) {
-      const nowStr = new Date().toLocaleString('zh-TW', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }).replace(/\//g, '-');
-      
-      const card = btn.closest('.card');
-      const info = card.querySelector('.info');
-      
-      info.innerHTML = info.innerHTML
-        .replace(/核銷狀態：未核銷/, '核銷狀態：已核銷')
-        + `核銷時間：${nowStr}<br>`;
-      
-      btn.className = 'redeemBtn done';
-      btn.innerHTML = `已核銷<br>${nowStr}`;
-      btn.disabled = true;
-    }
+        if (!j.ok) {
+            throw new Error(j.msg || '後端返回錯誤');
+        }
+        
+        const currentLocalTime = new Date();
+        const redeemTime = currentLocalTime.toLocaleString('zh-TW', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false 
+        }).replace(/\//g, '-'); 
 
-    function showNotification(message, type = 'success') {
-      const existing = document.querySelector('.notification');
-      if (existing) {
-        existing.remove();
+        const card = btn.closest('.card'); 
+        const infoDiv = card.querySelector('.info');
+        
+        let currentInfoHTML = infoDiv.innerHTML;
+        currentInfoHTML = currentInfoHTML.replace(/核銷狀態：未核銷/, '核銷狀態：已核銷'); 
+        
+        const redeemTimeLine = `核銷時間：${redeemTime}<br>`;
+        if (!currentInfoHTML.includes('核銷時間：')) {
+             currentInfoHTML = currentInfoHTML.replace(/核銷狀態：已核銷<br>/, `核銷狀態：已核銷<br>${redeemTimeLine}`);
+        } else {
+             currentInfoHTML = currentInfoHTML.replace(/核銷時間：.+?<br>/, redeemTimeLine);
+        }
+        infoDiv.innerHTML = currentInfoHTML;
+
+        btn.className='redeemBtn done'; 
+        btn.innerHTML=`已核銷<br>${redeemTime}`; 
+
+      } catch(e) {
+        console.error("核銷失敗:", e); 
+        alert('核銷失敗：'+e.message);
+        btn.disabled=false; 
+        btn.textContent='核銷'; 
       }
-      
-      const notification = document.createElement('div');
-      notification.className = `notification ${type}`;
-      notification.textContent = message;
-      document.body.appendChild(notification);
-      
-      setTimeout(() => {
-        notification.classList.add('show');
-      }, 100);
-      
-      setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => {
-          if (notification.parentNode) {
-            notification.remove();
-          }
-        }, 300);
-      }, 3000);
     }
 
     init();
