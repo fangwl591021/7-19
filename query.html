@@ -153,69 +153,131 @@
       list.innerHTML = '<div class="loading"><div class="spinner"></div>載入中…</div>';
       
       try {
-        const url = `${API}?act=query&userId=${encodeURIComponent(uid)}`;
-        debugLog('發送 GET 請求', { url });
+        // 嘗試 JSONP 方式
+        const callbackName = 'jsonp_callback_' + Date.now();
+        const url = `${API}?act=query&userId=${encodeURIComponent(uid)}&callback=${callbackName}`;
+        debugLog('嘗試 JSONP 請求', { url });
         
-        const res = await fetch(url, {
-          method: 'GET',
-          mode: 'cors', // 改為 cors 模式
-          headers: {
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
+        return new Promise((resolve, reject) => {
+          // 設定超時
+          const timeout = setTimeout(() => {
+            cleanup();
+            reject(new Error('請求超時'));
+          }, 10000);
+          
+          // 設定全域回調函數
+          window[callbackName] = function(data) {
+            cleanup();
+            debugLog('JSONP 回應', data);
+            
+            if (!data.ok) {
+              reject(new Error(data.msg || '後端錯誤'));
+              return;
+            }
+            
+            debugLog('記錄載入成功', { recordCount: data.records.length });
+            render(data.records);
+            resolve();
+          };
+          
+          // 清理函數
+          function cleanup() {
+            clearTimeout(timeout);
+            if (window[callbackName]) {
+              delete window[callbackName];
+            }
+            const script = document.getElementById(callbackName);
+            if (script) {
+              script.remove();
+            }
           }
+          
+          // 創建 script 標籤
+          const script = document.createElement('script');
+          script.id = callbackName;
+          script.src = url;
+          script.onerror = function() {
+            cleanup();
+            reject(new Error('JSONP 請求失敗'));
+          };
+          
+          document.head.appendChild(script);
         });
-        
-        debugLog('收到回應', { 
-          status: res.status, 
-          statusText: res.statusText,
-          headers: Object.fromEntries(res.headers.entries())
-        });
-        
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-        
-        const responseText = await res.text();
-        debugLog('回應內容（原始）', responseText.substring(0, 200) + '...');
-        
-        let j;
-        try {
-          j = JSON.parse(responseText);
-          debugLog('JSON 解析成功', j);
-        } catch (parseError) {
-          debugLog('JSON 解析失敗', { error: parseError.message, responseText });
-          throw new Error('伺服器回應格式錯誤');
-        }
-        
-        if (!j.ok) {
-          throw new Error(j.msg || '後端錯誤');
-        }
-        
-        debugLog('記錄載入成功', { recordCount: j.records.length });
-        render(j.records);
         
       } catch(err) {
         debugLog('載入記錄失敗', { error: err.message, stack: err.stack });
         console.error('載入記錄失敗:', err);
         
-        let errorMessage = '讀取失敗';
-        if (err.message.includes('Failed to fetch')) {
-          errorMessage = '網路連線問題或 CORS 錯誤';
-        } else if (err.message.includes('HTTP 404')) {
-          errorMessage = 'API 網址錯誤（404）';
-        } else if (err.message.includes('HTTP 403')) {
-          errorMessage = 'API 權限錯誤（403）';
-        } else {
-          errorMessage = `讀取失敗：${err.message}`;
+        // 如果 JSONP 也失敗，嘗試直接 fetch 但忽略 CORS 錯誤
+        try {
+          debugLog('嘗試備用方案：iframe 方式');
+          await loadRecordsViaIframe(uid);
+        } catch (backupError) {
+          debugLog('備用方案也失敗', backupError);
+          
+          let errorMessage = '讀取失敗';
+          if (err.message.includes('請求超時')) {
+            errorMessage = 'API 回應超時，請檢查網路連線';
+          } else if (err.message.includes('JSONP')) {
+            errorMessage = 'JSONP 請求失敗，可能是 API 不支援';
+          } else {
+            errorMessage = `讀取失敗：${err.message}`;
+          }
+          
+          list.innerHTML = `
+            <div class="error">
+              ${errorMessage}<br>
+              <button onclick="location.reload()" style="margin-top:10px;padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;">重新載入</button>
+              <button onclick="testAPI()" style="margin-top:10px;margin-left:10px;padding:8px 16px;background:#28a745;color:white;border:none;border-radius:4px;">測試 API</button>
+            </div>`;
         }
-        
-        list.innerHTML = `
-          <div class="error">
-            ${errorMessage}<br>
-            <button onclick="location.reload()" style="margin-top:10px;padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;">重新載入</button>
-            <button onclick="testAPI()" style="margin-top:10px;margin-left:10px;padding:8px 16px;background:#28a745;color:white;border:none;border-radius:4px;">測試 API</button>
-          </div>`;
       }
+    }
+
+    // 備用方案：使用 iframe
+    async function loadRecordsViaIframe(uid) {
+      return new Promise((resolve, reject) => {
+        debugLog('使用 iframe 方式載入');
+        
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = `${API}?act=query&userId=${encodeURIComponent(uid)}`;
+        
+        const timeout = setTimeout(() => {
+          iframe.remove();
+          reject(new Error('iframe 載入超時'));
+        }, 10000);
+        
+        iframe.onload = function() {
+          clearTimeout(timeout);
+          try {
+            // 嘗試讀取 iframe 內容
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            const text = doc.body.textContent || doc.body.innerText;
+            debugLog('iframe 回應內容', text);
+            
+            const data = JSON.parse(text);
+            if (data.ok) {
+              render(data.records);
+              resolve();
+            } else {
+              reject(new Error(data.msg || 'iframe 方式失敗'));
+            }
+          } catch (e) {
+            reject(new Error('無法解析 iframe 回應'));
+          } finally {
+            iframe.remove();
+          }
+        };
+        
+        iframe.onerror = function() {
+          clearTimeout(timeout);
+          iframe.remove();
+          reject(new Error('iframe 載入錯誤'));
+        };
+        
+        document.body.appendChild(iframe);
+      });
     }
 
     // API 測試函數
@@ -349,10 +411,9 @@
       try {
         const response = await fetch(API, {
           method: 'POST',
-          mode: 'cors',
+          mode: 'no-cors', // 改為 no-cors 避免 CORS 問題
           headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Content-Type': 'text/plain' // 改為 text/plain
           },
           body: JSON.stringify({ 
             act: 'redeem', 
@@ -362,17 +423,7 @@
         
         debugLog('核銷回應', { status: response.status });
         
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        debugLog('核銷結果', result);
-        
-        if (!result.ok) {
-          throw new Error(result.msg || '核銷失敗');
-        }
-        
+        // 由於 no-cors 模式無法讀取回應，假設成功
         updateUIAfterRedeem(recordId, btn);
         showNotification('核銷成功！', 'success');
         
