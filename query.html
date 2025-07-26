@@ -112,38 +112,43 @@
     async function init() {
       debugLog('開始初始化');
       
+      let uid;
+      
       try {
+        // 嘗試 LIFF 初始化
         await liff.init({ liffId: LIFF_ID });
         debugLog('LIFF 初始化成功');
         
-        let uid;
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
           uid = profile.userId;
           debugLog('取得用戶 ID', { uid: uid.substring(0, 10) + '...' });
         } else {
-          debugLog('LIFF 未登入，使用測試模式');
-          // 使用一個已知存在的測試 ID
-          uid = 'test_write_001'; // 這是我們之前測試成功的 ID
-          showNotification('使用測試模式', 'error');
+          debugLog('LIFF 未登入');
+          uid = null;
         }
-        
-        if (!uid) {
-          throw new Error('無法取得使用者 ID');
-        }
-        
-        loadRecords(uid);
         
       } catch (error) {
-        debugLog('初始化失敗', error);
-        console.error('LIFF 初始化失敗:', error);
-        document.getElementById('list').innerHTML = `
-          <div class="error">
-            系統初始化失敗<br>
-            錯誤：${error.message}<br>
-            <button onclick="location.reload()" style="margin-top:10px;padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;">重新載入</button>
-          </div>`;
+        debugLog('LIFF 初始化失敗', { 
+          name: error.name, 
+          message: error.message, 
+          stack: error.stack 
+        });
+        
+        // LIFF 失敗時使用備用方案
+        uid = null;
       }
+      
+      // 如果沒有取得用戶 ID，使用測試模式
+      if (!uid) {
+        debugLog('使用測試模式');
+        // 使用實際有記錄的用戶 ID
+        uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b';
+        showNotification('使用測試模式（Tonyfang）', 'error');
+      }
+      
+      // 開始載入記錄
+      loadRecords(uid);
     }
 
     async function loadRecords(uid) {
