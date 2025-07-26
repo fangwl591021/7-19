@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>轉轉小瑪莉</title>
+  <title>好運大方抽，快來試手機</title>
   <style>
     body { background:#000; color:#fff; text-align:center; font-family:"Microsoft JhengHei" }
     h1 { color:gold; margin:24px 0 12px }
+    .welcome { color:#90EE90; margin:16px 0; font-size:1.2em; font-weight:bold }
     #play, #submit { width:80%; max-width:320px; margin:12px auto; padding:14px 0;
       font-size:1.1em; border:none; border-radius:8px; display:block }
     #play { background:#28a745; color:#fff }
@@ -16,59 +17,82 @@
     input { width:80%; max-width:320px; padding:10px; margin:6px 0; border-radius:6px; border:none; font-size:1em }
     #msg { margin:18px 0 8px; font-size:1.4em; font-weight:bold }
     .error-msg { color:#ff6b6b; margin:18px 0 8px; font-size:1.2em; font-weight:bold }
-    .blocked { background:#dc3545 !important; color:#fff !important; cursor:not-allowed !important; }
+    .info-msg { color:#87CEEB; margin:18px 0 8px; font-size:1.1em }
   </style>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body>
   <h1>🎰 轉轉小瑪莉</h1>
+  <div class="welcome" id="welcomeMsg">載入中...</div>
   <button id="play" disabled>載入中…</button>
+  
+  <!-- 雙影片源 -->
   <video id="mv" playsinline>
-    <source src="https://voom-obs.line-scdn.net/hlCRdDEcYL206cTxjDScoFBNJJEIQdnV_LAIXSjV7EgYpVB9hLCd0ChpvBhcjSzV8LDMXCyt7DQAXSHVzAw0bTyF7K18pSBQ7ADAMTDFBN1Q-XQ/mp4">
+    <source id="videoSource" src="" type="video/mp4">
   </video>
+  
   <div id="msg"></div>
   <div class="error-msg" id="errorMsg" style="display:none"></div>
+  <div class="info-msg" id="infoMsg" style="display:none"></div>
+  
   <div id="form" style="display:none">
     <input id="username" placeholder="姓名" />
     <input id="phone" placeholder="手機" />
     <div id="wrapSubmit"><button id="submit">送出</button></div>
   </div>
+  
   <audio id="winSound" preload="auto"
            src="https://aiwe.cc/wp-content/uploads/2025/07/56ab24c15b72a457069c5ea42fcfc640.mp3"></audio>
   <audio id="loseSound" preload="auto"
            src="https://aiwe.cc/wp-content/uploads/2025/07/b3a7a4e64bcd8aabe4cabe0e55b57af5.mp3"></audio>
 
 <script>
-// 🔥 請更新為您的實際 LIFF ID 和 API 網址
+// 🔥 請更新為您的實際設定
 const LIFF_ID = "1656871455-A1lEEOaB"; 
-const API = "https://script.google.com/macros/s/AKfycbzbjj5BslON_wq9PYyomQrVgvK5Pcxpj-AAYmAb4ycl9LCoWklkIXR9p_h0tEZVZMjs/exec"; 
+const API = "https://script.google.com/macros/s/AKfycbxIYpfpoRkM-FS7Ziykc9vQm5iZ9kM2ZYsDIuxv3ovJDEd8FD1ghQfOsbSZ6rhzmbJ9/exec";
+
+// 雙影片源
+const VIDEO_SOURCES = [
+  {
+    url: "https://voom-obs.line-scdn.net/hlCRdDEcYL206cTxjDScoFBNJJEIQdnV_LAIXSjV7EgYpVB9hLCd0ChpvBhcjSzV8LDMXCyt7DQAXSHVzAw0bTyF7K18pSBQ7ADAMTDFBN1Q-XQ/mp4",
+    duration: 7000, // 7秒後暫停
+    type: "timed"
+  },
+  {
+    url: "https://aiwe.cc/wp-content/uploads/2025/07/bd0fe7a027d86c6e51da4e336c339e47.mp4",
+    duration: null, // 播放完整段
+    type: "full"
+  }
+];
 
 let uid="", uname="";
-const btnPlay=document.getElementById("play"),
-      mv=document.getElementById("mv"),
-      msg=document.getElementById("msg"),
-      errorMsg=document.getElementById("errorMsg"),
-      form=document.getElementById("form"),
-      inName=document.getElementById("username"),
-      inPhone=document.getElementById("phone"),
-      btnSend=document.getElementById("submit"),
-      winSound=document.getElementById("winSound"),
-      loseSound=document.getElementById("loseSound");
+let currentVideoType = "";
+
+const welcomeMsg = document.getElementById("welcomeMsg"),
+      btnPlay = document.getElementById("play"),
+      mv = document.getElementById("mv"),
+      videoSource = document.getElementById("videoSource"),
+      msg = document.getElementById("msg"),
+      errorMsg = document.getElementById("errorMsg"),
+      infoMsg = document.getElementById("infoMsg"),
+      form = document.getElementById("form"),
+      inName = document.getElementById("username"),
+      inPhone = document.getElementById("phone"),
+      btnSend = document.getElementById("submit"),
+      winSound = document.getElementById("winSound"),
+      loseSound = document.getElementById("loseSound");
 
 // 等待頁面載入完成
 window.addEventListener('load', function() {
-  // 檢查 LIFF SDK 是否載入
   if (typeof liff === 'undefined') {
     console.error('LIFF SDK 未載入');
-    btnPlay.textContent = "LIFF 載入失敗";
+    welcomeMsg.textContent = "LIFF 載入失敗";
+    btnPlay.textContent = "系統錯誤";
     btnPlay.disabled = true;
-    btnPlay.className = "blocked";
-    errorMsg.textContent = "LIFF SDK 載入失敗，請在 LINE 中開啟";
+    errorMsg.textContent = "請在 LINE 中開啟此頁面";
     errorMsg.style.display = "block";
     return;
   }
-
-  // 初始化 LIFF
   initializeLiff();
 });
 
@@ -90,227 +114,185 @@ async function initializeLiff() {
     
     console.log('用戶資料:', { uid: uid, uname: uname });
     
-    // 登入成功後立即檢查每日限制
-    await checkDailyLimitOnInit();
+    // 🔥 顯示歡迎訊息
+    welcomeMsg.textContent = `Hi ${uname}，歡迎來玩轉轉小瑪莉！`;
+    
+    // 🔥 直接允許遊戲，不做任何檢查
+    btnPlay.textContent = "開始遊戲";
+    btnPlay.disabled = false;
+    btnPlay.onclick = startGame;
     
   } catch (error) {
     console.error('LIFF 初始化失敗:', error);
-    
+    welcomeMsg.textContent = "系統初始化失敗";
     btnPlay.textContent = "系統錯誤";
     btnPlay.disabled = true;
-    btnPlay.className = "blocked";
-    btnPlay.onclick = null;
     errorMsg.textContent = "系統初始化失敗，請重新開啟";
     errorMsg.style.display = "block";
   }
 }
 
-// 檢查每日限制
-async function checkDailyLimitOnInit() {
-  console.log('=== 開始檢查每日限制 ===');
-  console.log('用戶ID:', uid);
+// 🔥 開始遊戲 - 不做任何檢查
+function startGame() {
+  console.log('🎮 開始遊戲 - 無需檢查');
   
   if (!uid) {
-    console.error('❌ 用戶ID不存在');
-    btnPlay.textContent = "用戶驗證失敗";
-    btnPlay.disabled = true;
-    btnPlay.className = "blocked";
-    btnPlay.onclick = null;
-    errorMsg.textContent = "用戶驗證失敗，請重新開啟";
+    errorMsg.textContent = "用戶資訊錯誤";
     errorMsg.style.display = "block";
     return;
   }
   
-  try {
-    btnPlay.textContent = "檢查中...";
-    btnPlay.disabled = true;
-    btnPlay.onclick = null;
-    
-    const checkBody = JSON.stringify({act:"checkDaily", userId:uid});
-    console.log('📤 發送檢查請求:', checkBody);
-    
-    const checkResponse = await fetch(API, {
-      method: "POST", 
-      mode: "cors",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: checkBody
-    });
-    
-    console.log('📥 檢查回應狀態:', checkResponse.status, checkResponse.statusText);
-    
-    if (!checkResponse.ok) {
-      throw new Error(`HTTP ${checkResponse.status}: ${checkResponse.statusText}`);
-    }
-    
-    const responseText = await checkResponse.text();
-    console.log('📄 原始回應內容:', responseText);
-    
-    let checkResult;
-    try {
-      checkResult = JSON.parse(responseText);
-      console.log('✅ JSON 解析成功:', checkResult);
-    } catch (parseError) {
-      console.error('❌ JSON 解析失敗:', parseError);
-      throw new Error('伺服器回應格式錯誤');
-    }
-    
-    // 🔥 超級嚴格檢查：只有明確成功才允許遊戲
-    console.log('🔍 詳細檢查結果:', {
-      success: checkResult.success,
-      type: typeof checkResult.success,
-      msg: checkResult.msg
-    });
-    
-    // 只有 success === true 且訊息包含「可以抽獎」才允許
-    if (checkResult.success === true && 
-        checkResult.msg && 
-        checkResult.msg.includes('可以抽獎')) {
-      
-      console.log('✅ 檢查完全通過，允許遊戲');
-      btnPlay.textContent = "開始遊戲";
-      btnPlay.disabled = false;
-      btnPlay.className = "";
-      btnPlay.onclick = startGame;
-      errorMsg.style.display = "none";
-      
-    } else {
-      // 任何其他情況都禁止遊戲
-      console.log('🚫 檢查不通過，禁止遊戲');
-      
-      if (checkResult.msg && checkResult.msg.includes('今日已玩過')) {
-        btnPlay.textContent = "今日已玩過";
-        btnPlay.className = "blocked";
-        errorMsg.textContent = "您今日已玩過，請明日再來試手氣！";
-        
-        // 3秒後顯示返回按鈕
-        setTimeout(() => {
-          btnPlay.textContent = "返回";
-          btnPlay.disabled = false;
-          btnPlay.className = "";
-          btnPlay.onclick = () => liff.closeWindow();
-        }, 3000);
-        
-      } else {
-        btnPlay.textContent = "檢查失敗";
-        btnPlay.className = "blocked";
-        errorMsg.textContent = checkResult.msg || "系統檢查失敗，請稍後再試";
-      }
-      
-      btnPlay.disabled = true;
-      btnPlay.onclick = null;
-      errorMsg.style.display = "block";
-    }
-    
-  } catch (e) {
-    console.error('❌ 檢查過程發生錯誤:', e);
-    
-    // 🔥 關鍵修復：任何錯誤都完全禁止遊戲
-    console.log('🚫 發生錯誤，完全禁止遊戲');
-    
-    btnPlay.textContent = "系統錯誤";
-    btnPlay.disabled = true;
-    btnPlay.className = "blocked";
-    btnPlay.onclick = null;
-    
-    if (e.message.includes('Failed to fetch')) {
-      errorMsg.textContent = "網路連線失敗，無法驗證遊戲權限";
-    } else if (e.message.includes('HTTP')) {
-      errorMsg.textContent = "伺服器錯誤，無法驗證遊戲權限";
-    } else {
-      errorMsg.textContent = "系統檢查失敗，無法驗證遊戲權限";
-    }
-    
-    errorMsg.style.display = "block";
-    
-    // 20秒後提供重新檢查選項
-    setTimeout(() => {
-      if (btnPlay.disabled && btnPlay.className.includes('blocked')) {
-        btnPlay.textContent = "重新檢查";
-        btnPlay.disabled = false;
-        btnPlay.className = "";
-        btnPlay.onclick = checkDailyLimitOnInit;
-      }
-    }, 20000);
-  }
-}
-
-// 遊戲開始函數
-function startGame() {
-  console.log('🎮 開始遊戲');
-  
-  // 最後安全檢查
-  if (!uid || btnPlay.disabled || btnPlay.className.includes('blocked')) {
-    console.log('❌ 最後檢查失敗');
-    btnPlay.textContent = "系統錯誤";
-    btnPlay.disabled = true;
-    btnPlay.className = "blocked";
-    btnPlay.onclick = null;
-    errorMsg.textContent = "系統狀態異常，無法開始遊戲";
-    errorMsg.style.display = "block";
-    return;
-  }
-  
-  // 重置訊息
-  errorMsg.style.display = "none";
+  // 重置所有訊息
   msg.textContent = "";
+  errorMsg.style.display = "none";
+  infoMsg.style.display = "none";
   
-  // 立即禁用按鈕防止重複點擊
+  // 隱藏按鈕，準備播放影片
   btnPlay.style.display = "none";
   
-  winSound.load(); 
-  loseSound.load();
+  // 🔥 隨機選擇影片
+  const selectedVideo = VIDEO_SOURCES[Math.floor(Math.random() * VIDEO_SOURCES.length)];
+  currentVideoType = selectedVideo.type;
+  
+  console.log('選中的影片:', selectedVideo);
+  
+  // 設定影片源並播放
+  videoSource.src = selectedVideo.url;
+  mv.load();
   mv.style.display = "block";
   mv.currentTime = 0;
-  mv.play();
-  setTimeout(() => mv.pause(), 7000);
+  
+  // 載入音效
+  winSound.load(); 
+  loseSound.load();
+  
+  mv.play().then(() => {
+    console.log('影片開始播放');
+    
+    // 如果是定時影片，設定暫停時間
+    if (selectedVideo.duration) {
+      setTimeout(() => {
+        mv.pause();
+        console.log('定時影片暫停');
+      }, selectedVideo.duration);
+    }
+  }).catch(e => {
+    console.error('影片播放失敗:', e);
+    msg.textContent = "影片播放失敗";
+  });
 }
 
-mv.onpause = async () => {
+// 🔥 影片結束或暫停事件
+mv.onpause = mv.onended = async () => {
+  console.log('影片結束，開始抽獎流程');
   mv.style.display = "none";
   
-  const win = Math.random() < 0.25; // 25% 機率中獎
-  console.log('🎲 抽獎結果:', win ? 'WIN' : 'MISS');
+  // 🔥 先檢查用戶今日是否已有記錄
+  const hasRecordToday = await checkUserTodayRecord(uid);
   
-  // 發送抽獎結果到後端
-  try {
-    const drawBody = JSON.stringify({act:"draw", userId:uid, displayName:uname, result:win?"WIN":"MISS"});
-    console.log('📤 發送抽獎記錄:', drawBody);
+  let win = false;
+  let shouldRecord = false;
+  let resultMessage = "";
+  
+  if (hasRecordToday) {
+    // 🔥 今日已有記錄：直接給 MISS，不寫入新記錄
+    console.log('用戶今日已有記錄，直接給 MISS');
+    win = false;
+    shouldRecord = false;
+    resultMessage = "您今日已參加過，獎品一天只能獲得一次喔！";
     
-    const drawResponse = await fetch(API, {
-      method: "POST", 
-      mode: "cors",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: drawBody
-    });
+    infoMsg.textContent = "今日已參加過遊戲";
+    infoMsg.style.display = "block";
     
-    console.log('📥 抽獎記錄回應:', drawResponse.status);
-    
-  } catch (e) {
-    console.error("❌ 發送抽獎紀錄失敗:", e);
+  } else {
+    // 🔥 今日無記錄：使用隨機決定，並寫入記錄
+    console.log('用戶今日無記錄，進行正常抽獎');
+    win = Math.random() < 0.25; // 25% 機率中獎
+    shouldRecord = true;
+    resultMessage = win ? "🎊 恭喜中獎！" : "😭 再接再厲！";
   }
   
-  // 顯示抽獎結果
-  msg.textContent = win ? "🎊 恭喜中獎！" : "😭 再接再厲！";
+  console.log('🎲 最終結果:', { win, shouldRecord, resultMessage });
   
-  if(win){
-    try{ await winSound.play(); }catch(_){}
+  // 🔥 如果需要記錄，發送到後端
+  if (shouldRecord) {
+    try {
+      await recordLotteryResult(uid, uname, win ? "WIN" : "MISS");
+    } catch (e) {
+      console.error("記錄失敗:", e);
+    }
+  }
+  
+  // 顯示結果
+  msg.textContent = resultMessage;
+  
+  if (win) {
+    try { await winSound.play(); } catch(_) {}
     form.style.display = "block";
     inName.value = uname;
     btnSend.style.display = "block";
   } else {
-    try{ await loseSound.play(); }catch(_){}
+    try { await loseSound.play(); } catch(_) {}
     setTimeout(() => {
       liff.closeWindow();
-    }, 2000); 
+    }, 3000);
   }
 };
 
+// 🔥 檢查用戶今日是否已有記錄
+async function checkUserTodayRecord(userId) {
+  console.log('檢查用戶今日記錄:', userId);
+  
+  try {
+    const response = await fetch(`${API}?act=checkDaily&userId=${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      mode: 'cors'
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('檢查結果:', result);
+      
+      // 如果 success 為 false 且訊息包含已玩過，表示今日有記錄
+      if (result.success === false && result.msg && result.msg.includes('已玩過')) {
+        return true; // 今日已有記錄
+      }
+    }
+    
+    return false; // 今日無記錄
+    
+  } catch (error) {
+    console.error('檢查記錄失敗:', error);
+    return false; // 錯誤時假設無記錄，允許抽獎
+  }
+}
+
+// 🔥 記錄抽獎結果
+async function recordLotteryResult(userId, displayName, result) {
+  console.log('記錄抽獎結果:', { userId, displayName, result });
+  
+  try {
+    const response = await fetch(API, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        act: "draw",
+        userId: userId,
+        displayName: displayName,
+        result: result
+      })
+    });
+    
+    console.log('✅ 抽獎記錄已發送');
+    
+  } catch (error) {
+    console.error('❌ 記錄失敗:', error);
+    throw error;
+  }
+}
+
+// 中獎資料提交
 btnSend.onclick = () => {
   if(!inName.value.trim()){
     alert("請填寫姓名");
@@ -327,11 +309,8 @@ btnSend.onclick = () => {
 
   fetch(API, {
     method: "POST", 
-    mode: "cors",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    },
+    mode: "no-cors",
+    headers: {"Content-Type": "text/plain"},
     body: JSON.stringify({
       act: "winner",
       userId: uid,
@@ -339,20 +318,13 @@ btnSend.onclick = () => {
       name: inName.value.trim(),
       phone: inPhone.value.trim()
     })
-  }).then(response => {
-    console.log('📥 中獎資料提交回應:', response.status);
-    
-    if (response.ok) {
-      msg.textContent = "✅ 資料已送出！感謝您的填寫！";
-      btnSend.disabled = false;
-      btnSend.style.background = "#fff";
-      btnSend.style.color = "#000";
-      btnSend.innerText = "點右上角 X 返回";
-      btnSend.onclick = () => liff.closeWindow();
-    } else {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
+  }).then(() => {
+    msg.textContent = "✅ 資料已送出！感謝您的填寫！";
+    btnSend.disabled = false;
+    btnSend.style.background = "#fff";
+    btnSend.style.color = "#000";
+    btnSend.innerText = "點右上角 X 返回";
+    btnSend.onclick = () => liff.closeWindow();
   }).catch((e) => {
     alert("送出失敗：網路問題或伺服器錯誤。\n" + e.message);
     console.error("❌ 提交資料失敗:", e);
