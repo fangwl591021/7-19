@@ -144,7 +144,6 @@
     function formatDateDisplay(date) {
       if (!date) return '';
       
-      // 處理各種可能的日期格式
       let dateObj;
       
       if (date instanceof Date) {
@@ -152,36 +151,36 @@
       } else {
         const dateStr = String(date).trim();
         
-        // 嘗試多種日期格式
-        const formats = [
-          dateStr,
-          dateStr.replace(/-/g, '/'),
-          dateStr.replace(/T.*$/, ''), // 移除時間部分
-          dateStr.split('T')[0], // 只取日期部分
-        ];
+        // 先嘗試直接解析
+        dateObj = new Date(dateStr);
         
-        for (const format of formats) {
-          const testDate = new Date(format);
-          if (!isNaN(testDate.getTime())) {
-            dateObj = testDate;
-            break;
+        // 如果失敗，嘗試其他格式
+        if (isNaN(dateObj.getTime())) {
+          // 嘗試移除時間部分
+          const dateOnly = dateStr.split('T')[0];
+          dateObj = new Date(dateOnly);
+          
+          // 如果還是失敗，嘗試替換分隔符
+          if (isNaN(dateObj.getTime())) {
+            const withSlash = dateOnly.replace(/-/g, '/');
+            dateObj = new Date(withSlash);
           }
-        }
-        
-        // 如果還是無法解析，嘗試手動解析 YYYY-MM-DD 格式
-        if (!dateObj) {
-          const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-          if (match) {
-            const year = parseInt(match[1]);
-            const month = parseInt(match[2]) - 1; // JavaScript 月份從 0 開始
-            const day = parseInt(match[3]);
-            dateObj = new Date(year, month, day);
+          
+          // 最後嘗試手動解析
+          if (isNaN(dateObj.getTime())) {
+            const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (match) {
+              const year = parseInt(match[1]);
+              const month = parseInt(match[2]) - 1;
+              const day = parseInt(match[3]);
+              dateObj = new Date(year, month, day);
+            }
           }
         }
       }
       
       if (!dateObj || isNaN(dateObj.getTime())) {
-        return '日期格式錯誤';
+        return '過期日期錯誤';
       }
       
       // 格式化為 YYYY-MM-DD
@@ -208,8 +207,18 @@
           expDisp = formatDateDisplay(o.expiryTime);
           
           // 如果日期格式正確，檢查是否過期
-          if (expDisp !== '日期格式錯誤' && expDisp !== '') {
-            const expiryDate = new Date(expDisp + 'T23:59:59'); // 設為當天最後一刻
+          if (expDisp !== '過期日期錯誤' && expDisp !== '') {
+            // 設定過期時間為當天的 23:59:59
+            const expiryDate = new Date(expDisp + 'T23:59:59');
+            
+            console.log('過期檢查:', {
+              原始: o.expiryTime,
+              格式化: expDisp,
+              過期時間: expiryDate,
+              現在時間: now,
+              是否過期: expiryDate < now
+            });
+            
             if (expiryDate < now) {
               isExpired = true;
               expClass = 'expiry-date'; // 紅色 - 已過期
