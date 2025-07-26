@@ -21,7 +21,7 @@
     .back { position:fixed; top:12px; left:12px; background:#007bff; color:#fff;
             border:none; padding:8px 12px; border-radius:5px; }
     
-    /* 新增：通知樣式 */
+    /* 通知樣式 */
     .notification {
       position: fixed;
       top: 20px;
@@ -44,7 +44,7 @@
       background: #e74c3c;
     }
     
-    /* 新增：載入動畫 */
+    /* 載入動畫 */
     .spinner {
       border: 2px solid #f3f3f3;
       border-top: 2px solid #3498db;
@@ -60,6 +60,17 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+
+    /* 除錯資訊樣式 */
+    .debug-info {
+      background: #222;
+      border: 1px solid #444;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-size: 0.8em;
+      color: #ccc;
+    }
   </style>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
@@ -69,66 +80,178 @@
   <div id="list"><div class="loading">載入中…</div></div>
 
   <script>
-    const LIFF_ID = '1656871455-Np5YYVlv'; // 請替換為你的 LIFF ID
-    const API     = 'https://script.google.com/macros/s/AKfycbw-bzZgQAQAQ78R4DtSZjErGyqOsMrVJHrM8yybxv9ey6Re07pJu0Sn123AStqcahF_/exec';
+    const LIFF_ID = '1656871455-Np5YYVlv';
+    // *** 重要：使用與抽獎頁面相同的 API 網址 ***
+    const API = 'https://script.google.com/macros/s/AKfycbw-bzZgQAQAQ78R4DtSZjErGyqOsMrVJHrM8yybxv9ey6Re07pJu0Sn123AStqcahF_/exec';
+
+    let debugMode = true; // 開啟除錯模式
+
+    function debugLog(message, data = null) {
+      if (debugMode) {
+        console.log(`[DEBUG] ${message}`, data);
+        
+        // 也顯示在頁面上
+        const debugDiv = document.getElementById('debug-info') || createDebugDiv();
+        const time = new Date().toLocaleTimeString();
+        debugDiv.innerHTML += `<div>[${time}] ${message} ${data ? JSON.stringify(data) : ''}</div>`;
+        debugDiv.scrollTop = debugDiv.scrollHeight;
+      }
+    }
+
+    function createDebugDiv() {
+      const debugDiv = document.createElement('div');
+      debugDiv.id = 'debug-info';
+      debugDiv.className = 'debug-info';
+      debugDiv.innerHTML = '<strong>除錯資訊：</strong><br>';
+      debugDiv.style.maxHeight = '200px';
+      debugDiv.style.overflow = 'auto';
+      document.body.appendChild(debugDiv);
+      return debugDiv;
+    }
 
     async function init() {
+      debugLog('開始初始化');
+      
       try {
         await liff.init({ liffId: LIFF_ID });
+        debugLog('LIFF 初始化成功');
+        
         let uid;
         if (liff.isLoggedIn()) {
-          uid = (await liff.getProfile()).userId;
+          const profile = await liff.getProfile();
+          uid = profile.userId;
+          debugLog('取得用戶 ID', { uid: uid.substring(0, 10) + '...' });
         } else {
-          uid = prompt('請輸入測試用 LINE ID');
+          debugLog('LIFF 未登入，使用測試模式');
+          // 使用一個已知存在的測試 ID
+          uid = 'test_write_001'; // 這是我們之前測試成功的 ID
+          showNotification('使用測試模式', 'error');
         }
+        
         if (!uid) {
-          document.getElementById('list').innerHTML = '<div class="error">無法取得使用者 ID</div>';
-        } else {
-          loadRecords(uid);
+          throw new Error('無法取得使用者 ID');
         }
+        
+        loadRecords(uid);
+        
       } catch (error) {
+        debugLog('初始化失敗', error);
         console.error('LIFF 初始化失敗:', error);
-        document.getElementById('list').innerHTML = '<div class="error">系統初始化失敗，請重新整理頁面</div>';
+        document.getElementById('list').innerHTML = `
+          <div class="error">
+            系統初始化失敗<br>
+            錯誤：${error.message}<br>
+            <button onclick="location.reload()" style="margin-top:10px;padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;">重新載入</button>
+          </div>`;
       }
     }
 
     async function loadRecords(uid) {
+      debugLog('開始載入記錄', { uid });
+      
       const list = document.getElementById('list');
       list.innerHTML = '<div class="loading"><div class="spinner"></div>載入中…</div>';
       
       try {
-        const res = await fetch(`${API}?act=query&userId=${encodeURIComponent(uid)}`, {
+        const url = `${API}?act=query&userId=${encodeURIComponent(uid)}`;
+        debugLog('發送 GET 請求', { url });
+        
+        const res = await fetch(url, {
           method: 'GET',
+          mode: 'cors', // 改為 cors 模式
           headers: {
             'Accept': 'application/json',
             'Cache-Control': 'no-cache'
           }
         });
         
+        debugLog('收到回應', { 
+          status: res.status, 
+          statusText: res.statusText,
+          headers: Object.fromEntries(res.headers.entries())
+        });
+        
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
         
-        const j = await res.json();
+        const responseText = await res.text();
+        debugLog('回應內容（原始）', responseText.substring(0, 200) + '...');
+        
+        let j;
+        try {
+          j = JSON.parse(responseText);
+          debugLog('JSON 解析成功', j);
+        } catch (parseError) {
+          debugLog('JSON 解析失敗', { error: parseError.message, responseText });
+          throw new Error('伺服器回應格式錯誤');
+        }
+        
         if (!j.ok) {
           throw new Error(j.msg || '後端錯誤');
         }
         
+        debugLog('記錄載入成功', { recordCount: j.records.length });
         render(j.records);
+        
       } catch(err) {
+        debugLog('載入記錄失敗', { error: err.message, stack: err.stack });
         console.error('載入記錄失敗:', err);
-        list.innerHTML = `<div class="error">讀取失敗：${err.message}<br><button onclick="location.reload()" style="margin-top:10px;padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;">重新載入</button></div>`;
+        
+        let errorMessage = '讀取失敗';
+        if (err.message.includes('Failed to fetch')) {
+          errorMessage = '網路連線問題或 CORS 錯誤';
+        } else if (err.message.includes('HTTP 404')) {
+          errorMessage = 'API 網址錯誤（404）';
+        } else if (err.message.includes('HTTP 403')) {
+          errorMessage = 'API 權限錯誤（403）';
+        } else {
+          errorMessage = `讀取失敗：${err.message}`;
+        }
+        
+        list.innerHTML = `
+          <div class="error">
+            ${errorMessage}<br>
+            <button onclick="location.reload()" style="margin-top:10px;padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;">重新載入</button>
+            <button onclick="testAPI()" style="margin-top:10px;margin-left:10px;padding:8px 16px;background:#28a745;color:white;border:none;border-radius:4px;">測試 API</button>
+          </div>`;
       }
     }
 
-    // 改良的日期解析函數
+    // API 測試函數
+    async function testAPI() {
+      debugLog('開始 API 測試');
+      
+      try {
+        const testUrl = `${API}?act=query&userId=test_write_001`;
+        debugLog('測試 URL', testUrl);
+        
+        const response = await fetch(testUrl, {
+          method: 'GET',
+          mode: 'cors'
+        });
+        
+        debugLog('API 測試回應', {
+          status: response.status,
+          statusText: response.statusText
+        });
+        
+        const text = await response.text();
+        debugLog('API 測試內容', text);
+        
+        showNotification('API 測試完成，請查看除錯資訊', 'success');
+        
+      } catch (error) {
+        debugLog('API 測試失敗', error);
+        showNotification('API 測試失敗', 'error');
+      }
+    }
+
     function parseExpiryDate(dateString) {
       if (!dateString || dateString === '過期日期錯誤') return null;
       
-      // 移除可能的多餘空白
       dateString = dateString.toString().trim();
       
-      // 嘗試多種日期格式
       const formats = [
         dateString,
         dateString + 'T23:59:59.999Z',
@@ -142,16 +265,15 @@
         }
       }
       
-      // 嘗試手動解析 YYYY-MM-DD 格式
       const match = dateString.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
       if (match) {
         const year = parseInt(match[1]);
-        const month = parseInt(match[2]) - 1; // JavaScript 月份從 0 開始
+        const month = parseInt(match[2]) - 1;
         const day = parseInt(match[3]);
         return new Date(year, month, day, 23, 59, 59);
       }
       
-      console.warn('無法解析日期:', dateString);
+      debugLog('無法解析日期', dateString);
       return null;
     }
 
@@ -161,6 +283,8 @@
     }
 
     function render(arr) {
+      debugLog('開始渲染記錄', { count: arr.length });
+      
       const list = document.getElementById('list');
       if (!arr || !arr.length) {
         list.innerHTML = '<p class="loading">尚無中獎紀錄</p>';
@@ -169,7 +293,8 @@
       
       const now = new Date();
       list.innerHTML = arr.map(o => {
-        // 使用改良的日期解析
+        debugLog('渲染記錄項目', o);
+        
         let isExpired = false;
         let expDisp = '無過期時間';
         let expClass = 'expiry-date valid';
@@ -188,7 +313,6 @@
           }
         }
         
-        // 核銷按鈕
         let btnHtml;
         if (o.redeemed === '是') {
           btnHtml = `<button class="redeemBtn done" disabled>已核銷<br>${o.redeemTime || '時間未知'}</button>`;
@@ -213,87 +337,53 @@
       }).join('');
     }
 
-    // 改良的核銷函數
     async function redeem(recordId, btn) {
       if (btn.disabled) return;
+      
+      debugLog('開始核銷', { recordId });
       
       btn.disabled = true;
       btn.className = 'redeemBtn loading';
       btn.innerHTML = '<div class="spinner"></div>處理中…';
       
       try {
-        // 嘗試不同的請求方式
-        let response;
+        const response = await fetch(API, {
+          method: 'POST',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ 
+            act: 'redeem', 
+            recordId: recordId
+          })
+        });
         
-        try {
-          // 首先嘗試標準的 JSON 請求
-          response = await fetch(API, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({ 
-              act: 'redeem', 
-              recordId: recordId,
-              timestamp: new Date().toISOString()
-            })
-          });
-        } catch (corsError) {
-          console.warn('JSON 請求失敗，嘗試 form-data:', corsError);
-          
-          // 如果 CORS 問題，嘗試 form-data
-          const formData = new FormData();
-          formData.append('act', 'redeem');
-          formData.append('recordId', recordId);
-          formData.append('timestamp', new Date().toISOString());
-          
-          response = await fetch(API, {
-            method: 'POST',
-            body: formData
-          });
-        }
+        debugLog('核銷回應', { status: response.status });
         
-        // 檢查回應狀態
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        // 嘗試解析回應
-        let result;
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          result = await response.json();
-          if (!result.success && !result.ok) {
-            throw new Error(result.message || result.msg || '核銷失敗');
-          }
-        } else {
-          // 如果不是 JSON，假設成功
-          result = { success: true };
+        const result = await response.json();
+        debugLog('核銷結果', result);
+        
+        if (!result.ok) {
+          throw new Error(result.msg || '核銷失敗');
         }
         
-        // 成功處理
         updateUIAfterRedeem(recordId, btn);
         showNotification('核銷成功！', 'success');
         
       } catch (error) {
-        console.error('核銷錯誤:', error);
+        debugLog('核銷失敗', error);
         
-        // 錯誤處理
         btn.disabled = false;
         btn.className = 'redeemBtn';
         btn.innerHTML = '核銷';
         
-        let errorMsg = '核銷失敗';
-        if (error.message.includes('Failed to fetch')) {
-          errorMsg = '網路連線問題，請檢查網路後重試';
-        } else if (error.message.includes('CORS')) {
-          errorMsg = '系統設定問題，請聯繫客服';
-        } else {
-          errorMsg = `核銷失敗：${error.message}`;
-        }
-        
-        showNotification(errorMsg, 'error');
+        showNotification(`核銷失敗：${error.message}`, 'error');
       }
     }
 
@@ -310,37 +400,30 @@
       const card = btn.closest('.card');
       const info = card.querySelector('.info');
       
-      // 更新資訊顯示
       info.innerHTML = info.innerHTML
         .replace(/核銷狀態：未核銷/, '核銷狀態：已核銷')
         + `核銷時間：${nowStr}<br>`;
       
-      // 更新按鈕狀態
       btn.className = 'redeemBtn done';
       btn.innerHTML = `已核銷<br>${nowStr}`;
       btn.disabled = true;
     }
 
-    // 通知系統
     function showNotification(message, type = 'success') {
-      // 移除現有通知
       const existing = document.querySelector('.notification');
       if (existing) {
         existing.remove();
       }
       
-      // 創建新通知
       const notification = document.createElement('div');
       notification.className = `notification ${type}`;
       notification.textContent = message;
       document.body.appendChild(notification);
       
-      // 顯示動畫
       setTimeout(() => {
         notification.classList.add('show');
       }, 100);
       
-      // 自動隱藏
       setTimeout(() => {
         notification.classList.remove('show');
         setTimeout(() => {
@@ -351,7 +434,6 @@
       }, 3000);
     }
 
-    // 頁面載入時初始化
     init();
   </script>
 </body>
