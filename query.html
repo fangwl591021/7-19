@@ -12,6 +12,7 @@
     .card h3 { margin:0 0 8px; color:#fff; }
     .info { font-size:.9em; line-height:1.4; }
     .expiry-date { color: #ff5555; font-weight: bold; }
+    .expiry-date.valid { color: #55ff55; }
     .redeemBtn { width:100%; padding:10px; margin-top:8px; border:none; border-radius:6px;
                  background:#ffc107; color:#000; font-size:1em; }
     .redeemBtn.done { background:#666; color:#bbb; cursor:not-allowed; }
@@ -31,37 +32,164 @@
     const API     = 'https://script.google.com/macros/s/AKfycbx6ioY0veJL_Pwxda93MsWux5jGN4wviU4JoCKuST7tXvsXmMUOhResWTDQxxJVtHOn/exec';
 
     async function init() {
-      await liff.init({ liffId: LIFF_ID });
-      let uid;
-      if (liff.isLoggedIn()) {
-        const profile = await liff.getProfile();
-        uid = profile.userId;
-      } else {
-        uid = prompt('請輸入測試用 LINE ID'); 
+      // 檢查是否在短時間內重複載入
+      const lastLoadTime = localStorage.getItem('lastLoadTime');
+      const now = Date.now();
+      if (lastLoadTime && (now - parseInt(lastLoadTime)) < 30000) { // 30秒內
+        document.getElementById('list').innerHTML = `
+          <div class="error">
+            請等待 30 秒後再重新載入<br>
+            <small>避免觸發速率限制</small><br>
+            <button onclick="forceReload()" style="margin-top:10px;padding:8px 16px;background:#dc3545;color:white;border:none;border-radius:4px;">強制重新載入</button>
+          </div>`;
+        return;
       }
-      if (uid) loadRecords(uid);
-      else document.getElementById('list').innerHTML = `<div class="error">無法取得使用者 ID</div>`;
+      
+      localStorage.setItem('lastLoadTime', now.toString());
+      
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        let uid;
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          uid = profile.userId;
+        } else {
+          uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b';
+          console.log('使用測試模式：Tonyfang 的記錄');
+        }
+        if (uid) loadRecords(uid);
+        else document.getElementById('list').innerHTML = `<div class="error">無法取得使用者 ID</div>`;
+      } catch (error) {
+        console.log('LIFF 失敗，使用測試模式');
+        const uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b';
+        loadRecords(uid);
+      }
+    }
+
+    function forceReload() {
+      localStorage.removeItem('lastLoadTime');
+      location.reload();
     }
 
     async function loadRecords(uid) {
       const list = document.getElementById('list');
       list.innerHTML = '<div class="loading">載入中…</div>';
+      
+      console.log('開始載入記錄，用戶ID:', uid);
+      console.log('API 網址:', API);
+      
       try {
-        const res = await fetch(`${API}?act=query&userId=${encodeURIComponent(uid)}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const j = await res.json();
-        if (!j.ok) throw new Error(j.msg||'後端錯誤');
+        const url = `${API}?act=query&userId=${encodeURIComponent(uid)}`;
+        console.log('完整請求 URL:', url);
+        
+        // 添加隨機延遲避免速率限制
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000));
+        
+        const res = await fetch(url);
+        console.log('回應狀態:', res.status, res.statusText);
+        
+        if (res.status === 429) {
+          throw new Error('請求過於頻繁，請稍後再試 (HTTP 429)');
+        }
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        
+        const responseText = await res.text();
+        console.log('原始回應內容:', responseText);
+        
+        let j;
+        try {
+          j = JSON.parse(responseText);
+          console.log('解析後的 JSON:', j);
+        } catch (parseError) {
+          console.error('JSON 解析失敗:', parseError);
+          throw new Error(`JSON 解析失敗。原始回應: ${responseText.substring(0, 100)}...`);
+        }
+        
+        if (!j.ok) throw new Error(j.msg || '後端錯誤');
+        
+        console.log('記錄數量:', j.records.length);
         render(j.records);
+        
       } catch(err) {
-        list.innerHTML = `<div class="error">讀取失敗：${err.message}</div>`;
+        console.error('載入記錄失敗:', err);
+        
+        let errorMessage = err.message;
+        let retryButton = '';
+        
+        if (err.message.includes('429')) {
+          errorMessage = '請求過於頻繁，請等待 1-2 分鐘後重試';
+          retryButton = `<button onclick="setTimeout(() => location.reload(), 60000)" style="margin-top:10px;padding:8px 16px;background:#ffc107;color:black;border:none;border-radius:4px;">1分鐘後重新載入</button>`;
+        } else {
+          retryButton = `<button onclick="location.reload()" style="margin-top:10px;padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;">重新載入</button>`;
+        }
+        
+        list.innerHTML = `
+          <div class="error">
+            讀取失敗：${errorMessage}<br>
+            <small>錯誤代碼：${err.message}</small><br>
+            ${retryButton}
+            <button onclick="testDirectAPI('${uid}')" style="margin-top:10px;margin-left:10px;padding:8px 16px;background:#28a745;color:white;border:none;border-radius:4px;">直接測試 API</button>
+          </div>`;
       }
+    }
+
+    // 直接測試 API 的函數
+    function testDirectAPI(uid) {
+      const testUrl = `${API}?act=query&userId=${encodeURIComponent(uid)}`;
+      console.log('開啟測試 URL:', testUrl);
+      window.open(testUrl, '_blank');
     }
 
     function formatDateDisplay(date) {
       if (!date) return '';
-      date = new Date(String(date).replace(/-/g,'/'));
-      if (isNaN(date)) return '無效日期';
-      return date.toISOString().slice(0,10);
+      
+      // 處理各種可能的日期格式
+      let dateObj;
+      
+      if (date instanceof Date) {
+        dateObj = date;
+      } else {
+        const dateStr = String(date).trim();
+        
+        // 嘗試多種日期格式
+        const formats = [
+          dateStr,
+          dateStr.replace(/-/g, '/'),
+          dateStr.replace(/T.*$/, ''), // 移除時間部分
+          dateStr.split('T')[0], // 只取日期部分
+        ];
+        
+        for (const format of formats) {
+          const testDate = new Date(format);
+          if (!isNaN(testDate.getTime())) {
+            dateObj = testDate;
+            break;
+          }
+        }
+        
+        // 如果還是無法解析，嘗試手動解析 YYYY-MM-DD 格式
+        if (!dateObj) {
+          const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+          if (match) {
+            const year = parseInt(match[1]);
+            const month = parseInt(match[2]) - 1; // JavaScript 月份從 0 開始
+            const day = parseInt(match[3]);
+            dateObj = new Date(year, month, day);
+          }
+        }
+      }
+      
+      if (!dateObj || isNaN(dateObj.getTime())) {
+        return '日期格式錯誤';
+      }
+      
+      // 格式化為 YYYY-MM-DD
+      const year = dateObj.getFullYear();
+      const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+      const day = dateObj.getDate().toString().padStart(2, '0');
+      
+      return `${year}-${month}-${day}`;
     }
 
     function render(arr) {
@@ -74,13 +202,23 @@
       list.innerHTML = arr.map(o => {
         let isExpired = false;
         let expDisp = '無過期時間';
+        let expClass = 'expiry-date';
+        
         if (o.expiryTime) {
-          const d = new Date(String(o.expiryTime).replace(/-/g,'/'));
-          if (!isNaN(d)) {
-            expDisp = formatDateDisplay(d);
-            if (d < now) isExpired = true;
-          } else expDisp = '過期日期錯誤';
+          expDisp = formatDateDisplay(o.expiryTime);
+          
+          // 如果日期格式正確，檢查是否過期
+          if (expDisp !== '日期格式錯誤' && expDisp !== '') {
+            const expiryDate = new Date(expDisp + 'T23:59:59'); // 設為當天最後一刻
+            if (expiryDate < now) {
+              isExpired = true;
+              expClass = 'expiry-date'; // 紅色 - 已過期
+            } else {
+              expClass = 'expiry-date valid'; // 綠色 - 未過期
+            }
+          }
         }
+        
         let btnHtml;
         if (o.redeemed==='是') {
           btnHtml = `<button class="redeemBtn done" disabled>已核銷<br>${o.redeemTime}</button>`;
@@ -95,7 +233,7 @@
             <div class="info">
               店家名稱：${o.storeName || 'N/A'}<br>
               中獎時間：${o.winTime || 'N/A'}<br>
-              過期時間：<span class="expiry-date">${expDisp}</span><br>
+              過期時間：<span class="${expClass}">${expDisp}</span><br>
               核銷狀態：${o.redeemed==='是'?'已核銷':'未核銷'}<br>
               ${o.redeemed==='是'?`核銷時間：${o.redeemTime}<br>`:''}
             </div>
