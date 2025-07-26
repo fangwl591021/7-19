@@ -15,6 +15,7 @@
     video { width:100%; max-width:420px; border-radius:12px; display:none; margin-top:20px }
     input { width:80%; max-width:320px; padding:10px; margin:6px 0; border-radius:6px; border:none; font-size:1em }
     #msg { margin:18px 0 8px; font-size:1.4em; font-weight:bold }
+    .error-msg { color:#ff6b6b; margin:18px 0 8px; font-size:1.2em; font-weight:bold }
   </style>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
@@ -25,6 +26,7 @@
     <source src="https://voom-obs.line-scdn.net/hlCRdDEcYL206cTxjDScoFBNJJEIQdnV_LAIXSjV7EgYpVB9hLCd0ChpvBhcjSzV8LDMXCyt7DQAXSHVzAw0bTyF7K18pSBQ7ADAMTDFBN1Q-XQ/mp4">
   </video>
   <div id="msg"></div>
+  <div class="error-msg" id="errorMsg" style="display:none"></div>
   <div id="form" style="display:none">
     <input id="username" placeholder="姓名" />
     <input id="phone" placeholder="手機" />
@@ -45,6 +47,7 @@ let uid="", uname="";
 const btnPlay=document.getElementById("play"),
       mv=document.getElementById("mv"),
       msg=document.getElementById("msg"),
+      errorMsg=document.getElementById("errorMsg"),
       form=document.getElementById("form"),
       inName=document.getElementById("username"),
       inPhone=document.getElementById("phone"),
@@ -66,9 +69,12 @@ const btnPlay=document.getElementById("play"),
 })();
 
 btnPlay.onclick=()=>{
+  // 重置錯誤訊息
+  errorMsg.style.display="none";
+  msg.textContent="";
+  
   winSound.load(); loseSound.load();
   btnPlay.style.display="none";
-  msg.textContent="";
   mv.style.display="block";
   mv.currentTime=0;
   mv.play();
@@ -77,19 +83,44 @@ btnPlay.onclick=()=>{
 
 mv.onpause=async ()=>{
   mv.style.display="none";
-  const win=Math.random()<0.5; // 50% 機率中獎
-  msg.textContent=win?"🎊 恭喜中獎！":"😭 再接再厲！";
   
-  // 保持 mode:"no-cors" 如您所要求
-  // 前端發送抽獎結果到後端
-  fetch(API,{
-    method:"POST", 
-    mode:"no-cors", // 保持 no-cors
-    headers:{"Content-Type":"text/plain"}, // 保持 text/plain
-    body:JSON.stringify({act:"draw",userId:uid,displayName:uname,result:win?"WIN":"MISS"})
-  }).catch(e => { // 簡單的錯誤捕獲，僅用於日誌
-      console.error("發送抽獎紀錄失敗:", e);
-  });
+  // *** 調整中獎率從 50% 改為 25% ***
+  const win=Math.random()<0.25; // 25% 機率中獎
+  
+  console.log('抽獎結果:', win ? 'WIN' : 'MISS');
+  
+  // 發送抽獎結果到後端（包含每日限制檢查）
+  try {
+    const drawResponse = await fetch(API,{
+      method:"POST", 
+      mode:"no-cors",
+      headers:{"Content-Type":"text/plain"},
+      body:JSON.stringify({act:"draw",userId:uid,displayName:uname,result:win?"WIN":"MISS"})
+    });
+    
+    console.log('抽獎記錄已發送');
+    
+  } catch (e) {
+    console.error("發送抽獎紀錄失敗:", e);
+    
+    // 如果是每日限制的錯誤，特別處理
+    if (e.message && e.message.includes('今日已玩過')) {
+      errorMsg.textContent = "您今日已玩過，請明日再來試手氣！";
+      errorMsg.style.display = "block";
+      
+      // 顯示返回按鈕
+      setTimeout(() => {
+        btnPlay.style.display = "block";
+        btnPlay.textContent = "返回";
+        btnPlay.onclick = () => liff.closeWindow();
+      }, 2000);
+      
+      return; // 停止後續處理
+    }
+  }
+  
+  // 顯示抽獎結果
+  msg.textContent=win?"🎊 恭喜中獎！":"😭 再接再厲！";
   
   if(win){
     try{ await winSound.play(); }catch(_){}
@@ -98,7 +129,7 @@ mv.onpause=async ()=>{
     btnSend.style.display="block"; // 顯示送出按鈕
   } else {
     try{ await loseSound.play(); }catch(_){}
-    // 如果沒有中獎，2 秒後自動關閉 LIFF 視窗 (可選，您可以移除或調整時間)
+    // 如果沒有中獎，2 秒後自動關閉 LIFF 視窗
     setTimeout(() => {
         liff.closeWindow();
     }, 2000); 
@@ -119,17 +150,15 @@ btnSend.onclick=()=>{
   btnSend.innerText="送出中…";
   btnSend.style.background="#555"; // 按鈕變灰
 
-  // 保持 mode:"no-cors" 如您所要求
-  // **重點：這裡已移除 prize:"預設獎項"**
+  // 發送中獎資料
   fetch(API,{
     method:"POST", 
-    mode:"no-cors", // 保持 no-cors
-    headers:{"Content-Type":"text/plain"}, // 保持 text/plain
+    mode:"no-cors",
+    headers:{"Content-Type":"text/plain"},
     body:JSON.stringify({
       act:"winner",
       userId:uid,
       displayName:uname,
-      // prize:"預設獎項", // <-- 這一行已被移除，獎品名稱將由後端決定並寫入試算表
       name:inName.value.trim(),
       phone:inPhone.value.trim()
     })
@@ -143,8 +172,8 @@ btnSend.onclick=()=>{
     btnSend.innerText="點右上角 X 返回";
     btnSend.onclick=()=>liff.closeWindow(); // 點擊按鈕關閉視窗
   }).catch((e)=>{
-    alert("送出失敗：網路問題或伺服器錯誤。\n" + e.message); // 顯示錯誤訊息
-    console.error("提交資料失敗:", e); // 將錯誤輸出到控制台，方便除錯
+    alert("送出失敗：網路問題或伺服器錯誤。\n" + e.message);
+    console.error("提交資料失敗:", e);
     btnSend.disabled=false;
     btnSend.innerText="重新送出";
     btnSend.style.background="#ffc107";
