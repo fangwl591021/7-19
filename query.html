@@ -278,6 +278,14 @@
     async function redeem(recordId, btn) {
       console.log('開始核銷，記錄ID:', recordId);
       
+      // 添加確認流程
+      const confirmed = confirm('確定要核銷這個獎品嗎？\n\n核銷後將無法復原，請確認您要使用此獎品。');
+      
+      if (!confirmed) {
+        console.log('用戶取消核銷');
+        return; // 用戶取消，直接返回
+      }
+      
       btn.disabled = true; 
       btn.textContent = '處理中…';
       
@@ -330,7 +338,7 @@
         btn.innerHTML = `已核銷<br>${nowStr}`;
         
         console.log('UI 更新完成');
-        alert('核銷成功！');
+        alert('核銷成功！獎品已核銷完成。');
         
       } catch (e) {
         console.error('核銷失敗:', e);
