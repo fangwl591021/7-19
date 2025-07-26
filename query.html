@@ -155,7 +155,25 @@
         const dateStr = String(date).trim();
         
         // 如果是 ISO 格式 (2025-10-23T16:00:00.000Z)
-        if (dateStr.includes('T')) {
+        if (dateStr.includes('T') && dateStr.includes('Z')) {
+          // 對於 UTC 格式，直接提取日期部分，避免時區轉換
+          const datePart = dateStr.split('T')[0];
+          console.log('提取的日期部分:', datePart);
+          
+          // 手動解析 YYYY-MM-DD 格式
+          const match = datePart.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+          if (match) {
+            const year = parseInt(match[1]);
+            const month = parseInt(match[2]) - 1; // JavaScript 月份從 0 開始
+            const day = parseInt(match[3]);
+            dateObj = new Date(year, month, day);
+            console.log('手動解析的日期:', dateObj);
+          } else {
+            // 備用方案
+            dateObj = new Date(datePart + 'T12:00:00');
+          }
+        } else if (dateStr.includes('T')) {
+          // 其他帶時間的格式
           dateObj = new Date(dateStr);
         } else {
           // 如果是簡單的日期格式 (2025-10-23)
@@ -163,7 +181,7 @@
         }
         
         // 如果解析失敗，嘗試其他方式
-        if (isNaN(dateObj.getTime())) {
+        if (!dateObj || isNaN(dateObj.getTime())) {
           // 嘗試替換分隔符
           const withSlash = dateStr.replace(/-/g, '/');
           dateObj = new Date(withSlash);
@@ -205,12 +223,22 @@
           
           // 如果日期格式正確，檢查是否過期
           if (expDisp !== '過期日期錯誤' && expDisp !== '') {
-            // 設定過期時間為當天的 23:59:59
-            const expiryDate = new Date(expDisp + 'T23:59:59');
+            // 重要：從原始資料中提取正確的日期
+            let actualDate;
+            if (o.expiryTime.includes('T') && o.expiryTime.includes('Z')) {
+              // 對於 UTC 格式，提取日期部分避免時區問題
+              actualDate = o.expiryTime.split('T')[0];
+            } else {
+              actualDate = expDisp;
+            }
+            
+            // 設定過期時間為當天的 23:59:59 (台北時間)
+            const expiryDate = new Date(actualDate + 'T23:59:59+08:00');
             
             console.log('過期檢查:', {
               原始: o.expiryTime,
               格式化: expDisp,
+              實際日期: actualDate,
               過期時間: expiryDate,
               現在時間: now,
               是否過期: expiryDate < now
