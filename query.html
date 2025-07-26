@@ -140,6 +140,52 @@
       window.open(testUrl, '_blank');
     }
 
+    // 修正時區處理的日期格式化函數
+    function formatDateTimeDisplay(dateTime) {
+      if (!dateTime) return '';
+      
+      console.log('格式化日期時間輸入:', dateTime, typeof dateTime);
+      
+      let dateObj;
+      const dateStr = String(dateTime).trim();
+      
+      // 處理不同的日期時間格式
+      if (dateStr.includes('T') && dateStr.includes('Z')) {
+        // UTC 格式：轉換為台灣時間 (UTC+8)
+        dateObj = new Date(dateStr);
+        if (!isNaN(dateObj.getTime())) {
+          // 加上 8 小時轉換為台灣時間
+          dateObj = new Date(dateObj.getTime() + (8 * 60 * 60 * 1000));
+        }
+      } else if (dateStr.includes('T')) {
+        // 其他帶時間的格式，假設已經是台灣時間
+        dateObj = new Date(dateStr);
+      } else {
+        // 簡單格式，假設是台灣時間
+        dateObj = new Date(dateStr);
+      }
+      
+      console.log('解析後的日期時間物件:', dateObj);
+      
+      if (!dateObj || isNaN(dateObj.getTime())) {
+        console.log('日期時間解析失敗');
+        return '時間格式錯誤';
+      }
+      
+      // 格式化為台灣時間顯示 YYYY-MM-DD HH:mm:ss
+      const year = dateObj.getFullYear();
+      const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+      const day = dateObj.getDate().toString().padStart(2, '0');
+      const hours = dateObj.getHours().toString().padStart(2, '0');
+      const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+      const seconds = dateObj.getSeconds().toString().padStart(2, '0');
+      
+      const result = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      console.log('格式化結果:', result);
+      
+      return result;
+    }
+
     function formatDateDisplay(date) {
       if (!date) return '';
       
@@ -252,9 +298,14 @@
           }
         }
         
+        // 修正中獎時間顯示
+        const winTimeDisplay = formatDateTimeDisplay(o.winTime);
+        
         let btnHtml;
         if (o.redeemed==='是') {
-          btnHtml = `<button class="redeemBtn done" disabled>已核銷<br>${o.redeemTime}</button>`;
+          // 修正核銷時間顯示
+          const redeemTimeDisplay = formatDateTimeDisplay(o.redeemTime);
+          btnHtml = `<button class="redeemBtn done" disabled>已核銷<br>${redeemTimeDisplay}</button>`;
         } else if (isExpired) {
           btnHtml = `<button class="redeemBtn expired" disabled>已過期</button>`;
         } else {
@@ -265,10 +316,10 @@
             <h3>${o.prize}</h3>
             <div class="info">
               店家名稱：${o.storeName || 'N/A'}<br>
-              中獎時間：${o.winTime || 'N/A'}<br>
+              中獎時間：${winTimeDisplay}<br>
               過期時間：<span class="${expClass}">${expDisp}</span><br>
               核銷狀態：${o.redeemed==='是'?'已核銷':'未核銷'}<br>
-              ${o.redeemed==='是'?`核銷時間：${o.redeemTime}<br>`:''}
+              ${o.redeemed==='是'?`核銷時間：${formatDateTimeDisplay(o.redeemTime)}<br>`:''}
             </div>
             ${btnHtml}
           </div>`;
@@ -305,7 +356,7 @@
         console.log('核銷請求已發送，回應:', res);
         
         // 因為使用 no-cors，無法讀取回應，假設成功
-        // 更新 UI
+        // 更新 UI - 使用台灣時間
         const now = new Date();
         const nowStr = now.toLocaleString('zh-TW', {
           year: 'numeric', 
@@ -314,7 +365,8 @@
           hour: '2-digit', 
           minute: '2-digit', 
           second: '2-digit',
-          hour12: false 
+          hour12: false,
+          timeZone: 'Asia/Taipei'  // 明確指定台灣時區
         }).replace(/\//g, '-');
         
         console.log('核銷時間字串:', nowStr);
