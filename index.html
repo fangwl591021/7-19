@@ -8,7 +8,7 @@
     body { background:#000; color:#fff; text-align:center; font-family:"Microsoft JhengHei" }
     h1 { color:gold; margin:24px 0 12px }
     #play, #submit { width:80%; max-width:320px; margin:12px auto; padding:14px 0;
-      font-size:1.1em; border:none; border-radius:8px }
+      font-size:1.1em; border:none; border-radius:8px; display:block }
     #play { background:#28a745; color:#fff }
     #submit { background:#ffc107; color:#000; display:none }
     #wrapSubmit{display:flex; justify-content:center}
@@ -16,6 +16,7 @@
     input { width:80%; max-width:320px; padding:10px; margin:6px 0; border-radius:6px; border:none; font-size:1em }
     #msg { margin:18px 0 8px; font-size:1.4em; font-weight:bold }
     .error-msg { color:#ff6b6b; margin:18px 0 8px; font-size:1.2em; font-weight:bold }
+    .blocked { background:#dc3545 !important; color:#fff !important; cursor:not-allowed !important; }
   </style>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
@@ -36,9 +37,11 @@
            src="https://aiwe.cc/wp-content/uploads/2025/07/56ab24c15b72a457069c5ea42fcfc640.mp3"></audio>
   <audio id="loseSound" preload="auto"
            src="https://aiwe.cc/wp-content/uploads/2025/07/b3a7a4e64bcd8aabe4cabe0e55b57af5.mp3"></audio>
+
 <script>
+// 🔥 請更新為您的實際 LIFF ID 和 API 網址
 const LIFF_ID = "1656871455-A1lEEOaB"; 
-const API = "https://script.google.com/macros/s/AKfycbxiFi_JSdI9gMqy5poBGoVrHUaSDGFXywukQWcKhTN7Zgh313Qp2xqXSUUEii7Xn4lu/exec"; 
+const API = "https://script.google.com/macros/s/AKfycbwROaw8TMfmYVqQry8Di0mlz2dU9lOX5KUgG0VWheb5yfB1ce5rJgSKmpKulLnIMA-x/exec"; 
 
 let uid="", uname="";
 const btnPlay=document.getElementById("play"),
@@ -52,21 +55,27 @@ const btnPlay=document.getElementById("play"),
       winSound=document.getElementById("winSound"),
       loseSound=document.getElementById("loseSound");
 
-// 等待 LIFF SDK 載入完成
-window.addEventListener('load', async function() {
+// 等待頁面載入完成
+window.addEventListener('load', function() {
   // 檢查 LIFF SDK 是否載入
   if (typeof liff === 'undefined') {
     console.error('LIFF SDK 未載入');
     btnPlay.textContent = "LIFF 載入失敗";
     btnPlay.disabled = true;
-    errorMsg.textContent = "LIFF SDK 載入失敗，請重新開啟";
+    btnPlay.className = "blocked";
+    errorMsg.textContent = "LIFF SDK 載入失敗，請在 LINE 中開啟";
     errorMsg.style.display = "block";
     return;
   }
 
+  // 初始化 LIFF
+  initializeLiff();
+});
+
+async function initializeLiff() {
   try {
     console.log('開始 LIFF 初始化...');
-    await liff.init({liffId:LIFF_ID});
+    await liff.init({liffId: LIFF_ID});
     
     if(!liff.isLoggedIn()){ 
       console.log('用戶未登入，跳轉到登入頁面');
@@ -87,14 +96,14 @@ window.addEventListener('load', async function() {
   } catch (error) {
     console.error('LIFF 初始化失敗:', error);
     
-    // LIFF失敗，完全禁用遊戲
     btnPlay.textContent = "系統錯誤";
     btnPlay.disabled = true;
+    btnPlay.className = "blocked";
     btnPlay.onclick = null;
     errorMsg.textContent = "系統初始化失敗，請重新開啟";
     errorMsg.style.display = "block";
   }
-});
+}
 
 // 檢查每日限制
 async function checkDailyLimitOnInit() {
@@ -105,6 +114,7 @@ async function checkDailyLimitOnInit() {
     console.error('❌ 用戶ID不存在');
     btnPlay.textContent = "用戶驗證失敗";
     btnPlay.disabled = true;
+    btnPlay.className = "blocked";
     btnPlay.onclick = null;
     errorMsg.textContent = "用戶驗證失敗，請重新開啟";
     errorMsg.style.display = "block";
@@ -120,10 +130,10 @@ async function checkDailyLimitOnInit() {
     console.log('📤 發送檢查請求:', checkBody);
     
     const checkResponse = await fetch(API, {
-      method:"POST", 
-      mode:"cors",
-      headers:{
-        "Content-Type":"application/json",
+      method: "POST", 
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/json",
         "Accept": "application/json"
       },
       body: checkBody
@@ -154,7 +164,7 @@ async function checkDailyLimitOnInit() {
       msg: checkResult.msg
     });
     
-    // 只有 success === true 且沒有失敗訊息才允許
+    // 只有 success === true 且訊息包含「可以抽獎」才允許
     if (checkResult.success === true && 
         checkResult.msg && 
         checkResult.msg.includes('可以抽獎')) {
@@ -162,6 +172,7 @@ async function checkDailyLimitOnInit() {
       console.log('✅ 檢查完全通過，允許遊戲');
       btnPlay.textContent = "開始遊戲";
       btnPlay.disabled = false;
+      btnPlay.className = "";
       btnPlay.onclick = startGame;
       errorMsg.style.display = "none";
       
@@ -171,17 +182,20 @@ async function checkDailyLimitOnInit() {
       
       if (checkResult.msg && checkResult.msg.includes('今日已玩過')) {
         btnPlay.textContent = "今日已玩過";
+        btnPlay.className = "blocked";
         errorMsg.textContent = "您今日已玩過，請明日再來試手氣！";
         
         // 3秒後顯示返回按鈕
         setTimeout(() => {
           btnPlay.textContent = "返回";
           btnPlay.disabled = false;
+          btnPlay.className = "";
           btnPlay.onclick = () => liff.closeWindow();
         }, 3000);
         
       } else {
         btnPlay.textContent = "檢查失敗";
+        btnPlay.className = "blocked";
         errorMsg.textContent = checkResult.msg || "系統檢查失敗，請稍後再試";
       }
       
@@ -198,6 +212,7 @@ async function checkDailyLimitOnInit() {
     
     btnPlay.textContent = "系統錯誤";
     btnPlay.disabled = true;
+    btnPlay.className = "blocked";
     btnPlay.onclick = null;
     
     if (e.message.includes('Failed to fetch')) {
@@ -212,9 +227,12 @@ async function checkDailyLimitOnInit() {
     
     // 20秒後提供重新檢查選項
     setTimeout(() => {
-      btnPlay.textContent = "重新檢查";
-      btnPlay.disabled = false;
-      btnPlay.onclick = checkDailyLimitOnInit;
+      if (btnPlay.disabled && btnPlay.className.includes('blocked')) {
+        btnPlay.textContent = "重新檢查";
+        btnPlay.disabled = false;
+        btnPlay.className = "";
+        btnPlay.onclick = checkDailyLimitOnInit;
+      }
     }, 20000);
   }
 }
@@ -223,11 +241,12 @@ async function checkDailyLimitOnInit() {
 function startGame() {
   console.log('🎮 開始遊戲');
   
-  // 最後檢查
-  if (!uid || btnPlay.disabled) {
+  // 最後安全檢查
+  if (!uid || btnPlay.disabled || btnPlay.className.includes('blocked')) {
     console.log('❌ 最後檢查失敗');
     btnPlay.textContent = "系統錯誤";
     btnPlay.disabled = true;
+    btnPlay.className = "blocked";
     btnPlay.onclick = null;
     errorMsg.textContent = "系統狀態異常，無法開始遊戲";
     errorMsg.style.display = "block";
@@ -235,24 +254,24 @@ function startGame() {
   }
   
   // 重置訊息
-  errorMsg.style.display="none";
-  msg.textContent="";
+  errorMsg.style.display = "none";
+  msg.textContent = "";
   
   // 立即禁用按鈕防止重複點擊
-  btnPlay.style.display="none";
+  btnPlay.style.display = "none";
   
   winSound.load(); 
   loseSound.load();
-  mv.style.display="block";
-  mv.currentTime=0;
+  mv.style.display = "block";
+  mv.currentTime = 0;
   mv.play();
-  setTimeout(()=>mv.pause(),7000);
+  setTimeout(() => mv.pause(), 7000);
 }
 
-mv.onpause=async ()=>{
-  mv.style.display="none";
+mv.onpause = async () => {
+  mv.style.display = "none";
   
-  const win=Math.random()<0.25; // 25% 機率中獎
+  const win = Math.random() < 0.25; // 25% 機率中獎
   console.log('🎲 抽獎結果:', win ? 'WIN' : 'MISS');
   
   // 發送抽獎結果到後端
@@ -260,11 +279,11 @@ mv.onpause=async ()=>{
     const drawBody = JSON.stringify({act:"draw", userId:uid, displayName:uname, result:win?"WIN":"MISS"});
     console.log('📤 發送抽獎記錄:', drawBody);
     
-    const drawResponse = await fetch(API,{
-      method:"POST", 
-      mode:"cors",
-      headers:{
-        "Content-Type":"application/json",
+    const drawResponse = await fetch(API, {
+      method: "POST", 
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/json",
         "Accept": "application/json"
       },
       body: drawBody
@@ -277,22 +296,22 @@ mv.onpause=async ()=>{
   }
   
   // 顯示抽獎結果
-  msg.textContent=win?"🎊 恭喜中獎！":"😭 再接再厲！";
+  msg.textContent = win ? "🎊 恭喜中獎！" : "😭 再接再厲！";
   
   if(win){
     try{ await winSound.play(); }catch(_){}
-    form.style.display="block";
-    inName.value=uname;
-    btnSend.style.display="block";
+    form.style.display = "block";
+    inName.value = uname;
+    btnSend.style.display = "block";
   } else {
     try{ await loseSound.play(); }catch(_){}
     setTimeout(() => {
-        liff.closeWindow();
+      liff.closeWindow();
     }, 2000); 
   }
 };
 
-btnSend.onclick=()=>{
+btnSend.onclick = () => {
   if(!inName.value.trim()){
     alert("請填寫姓名");
     return;
@@ -302,44 +321,44 @@ btnSend.onclick=()=>{
     return;
   }
 
-  btnSend.disabled=true;
-  btnSend.innerText="送出中…";
-  btnSend.style.background="#555";
+  btnSend.disabled = true;
+  btnSend.innerText = "送出中…";
+  btnSend.style.background = "#555";
 
-  fetch(API,{
-    method:"POST", 
-    mode:"cors",
-    headers:{
-      "Content-Type":"application/json",
+  fetch(API, {
+    method: "POST", 
+    mode: "cors",
+    headers: {
+      "Content-Type": "application/json",
       "Accept": "application/json"
     },
-    body:JSON.stringify({
-      act:"winner",
-      userId:uid,
-      displayName:uname,
-      name:inName.value.trim(),
-      phone:inPhone.value.trim()
+    body: JSON.stringify({
+      act: "winner",
+      userId: uid,
+      displayName: uname,
+      name: inName.value.trim(),
+      phone: inPhone.value.trim()
     })
   }).then(response => {
     console.log('📥 中獎資料提交回應:', response.status);
     
     if (response.ok) {
-      msg.textContent="✅ 資料已送出！感謝您的填寫！";
-      btnSend.disabled=false;
-      btnSend.style.background="#fff";
-      btnSend.style.color="#000";
-      btnSend.innerText="點右上角 X 返回";
-      btnSend.onclick=()=>liff.closeWindow();
+      msg.textContent = "✅ 資料已送出！感謝您的填寫！";
+      btnSend.disabled = false;
+      btnSend.style.background = "#fff";
+      btnSend.style.color = "#000";
+      btnSend.innerText = "點右上角 X 返回";
+      btnSend.onclick = () => liff.closeWindow();
     } else {
       throw new Error(`HTTP ${response.status}`);
     }
     
-  }).catch((e)=>{
+  }).catch((e) => {
     alert("送出失敗：網路問題或伺服器錯誤。\n" + e.message);
     console.error("❌ 提交資料失敗:", e);
-    btnSend.disabled=false;
-    btnSend.innerText="重新送出";
-    btnSend.style.background="#ffc107";
+    btnSend.disabled = false;
+    btnSend.innerText = "重新送出";
+    btnSend.style.background = "#ffc107";
   });
 };
 </script>
