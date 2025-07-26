@@ -105,51 +105,50 @@ mv.onpause=async ()=>{
   }
 };
 
-btnSend.onclick=()=>{
-  if(!inName.value.trim()){
-    alert("請填寫姓名");
-    return;
-  }
-  if(!inPhone.value.trim()){
-    alert("請填寫手機號碼");
-    return;
-  }
+btnSend.onclick = () => {
+  if (!inName.value.trim())  { alert("請填寫姓名");  return; }
+  if (!inPhone.value.trim()) { alert("請填寫手機號碼"); return; }
 
-  btnSend.disabled=true; // 防止重複點擊
-  btnSend.innerText="送出中…";
-  btnSend.style.background="#555"; // 按鈕變灰
+  btnSend.disabled = true;
+  btnSend.innerText = "送出中…";
+  btnSend.style.background = "#555";
 
-  // 保持 mode:"no-cors" 如您所要求
-  // **重點：這裡已移除 prize:"預設獎項"**
-  fetch(API,{
-    method:"POST", 
-    mode:"no-cors", // 保持 no-cors
-    headers:{"Content-Type":"text/plain"}, // 保持 text/plain
-    body:JSON.stringify({
-      act:"winner",
-      userId:uid,
-      displayName:uname,
-      // prize:"預設獎項", // <-- 這一行已被移除，獎品名稱將由後端決定並寫入試算表
-      name:inName.value.trim(),
-      phone:inPhone.value.trim()
+  // 統一用這支 fetch 送 winner，Content-Type: application/json
+  fetch(API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      act:         "winner",
+      userId:      uid,
+      displayName: uname,
+      name:        inName.value.trim(),
+      phone:       inPhone.value.trim()
     })
-  }).then(()=>{
-    // 注意：由於 mode:"no-cors"，此處無法從後端讀取 JSON 響應內容
-    // 因此前端無法顯示後端選定的具體獎品名稱。
-    msg.textContent="✅ 資料已送出！感謝您的填寫！";
-    btnSend.disabled=false;
-    btnSend.style.background="#fff";
-    btnSend.style.color="#000";
-    btnSend.innerText="點右上角 X 返回";
-    btnSend.onclick=()=>liff.closeWindow(); // 點擊按鈕關閉視窗
-  }).catch((e)=>{
-    alert("送出失敗：網路問題或伺服器錯誤。\n" + e.message); // 顯示錯誤訊息
-    console.error("提交資料失敗:", e); // 將錯誤輸出到控制台，方便除錯
-    btnSend.disabled=false;
-    btnSend.innerText="重新送出";
-    btnSend.style.background="#ffc107";
+  })
+  .then(res => res.json())
+  .then(js => {
+    console.log("winner 回傳：", js);
+    alert("後端回傳：" + JSON.stringify(js));
+    if (js.success) {
+      msg.textContent = "✅ 中獎資料已寫入！獎品：" + (js.prize || "<未知>");
+      btnSend.innerText = "關閉視窗";
+      btnSend.onclick = () => liff.closeWindow();
+    } else {
+      msg.textContent = "❌ 寫入失敗：" + js.msg;
+      btnSend.disabled = false;
+      btnSend.innerText = "重新送出";
+      btnSend.style.background = "#ffc107";
+    }
+  })
+  .catch(err => {
+    console.error("winner fetch 發生錯誤:", err);
+    alert("fetch 失敗：" + err);
+    btnSend.disabled = false;
+    btnSend.innerText = "重新送出";
+    btnSend.style.background = "#ffc107";
   });
 };
+
 </script>
 </body>
 </html>
