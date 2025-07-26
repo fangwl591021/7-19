@@ -109,15 +109,16 @@ btnSend.onclick = () => {
   if (!inName.value.trim())  { alert("請填寫姓名");  return; }
   if (!inPhone.value.trim()) { alert("請填寫手機號碼"); return; }
 
-  btnSend.disabled = true;
-  btnSend.innerText = "送出中…";
+  btnSend.disabled   = true;
+  btnSend.innerText  = "送出中…";
   btnSend.style.background = "#555";
 
-  // 統一用這支 fetch 送 winner，Content-Type: application/json
+  // ← 一定要加上 mode:"no-cors"，否則失敗就不會送出
   fetch(API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+    mode:   "no-cors",
+    headers:{ "Content-Type":"text/plain" },
+    body:   JSON.stringify({
       act:         "winner",
       userId:      uid,
       displayName: uname,
@@ -125,29 +126,21 @@ btnSend.onclick = () => {
       phone:       inPhone.value.trim()
     })
   })
-  .then(res => res.json())
-  .then(js => {
-    console.log("winner 回傳：", js);
-    alert("後端回傳：" + JSON.stringify(js));
-    if (js.success) {
-      msg.textContent = "✅ 中獎資料已寫入！獎品：" + (js.prize || "<未知>");
-      btnSend.innerText = "關閉視窗";
-      btnSend.onclick = () => liff.closeWindow();
-    } else {
-      msg.textContent = "❌ 寫入失敗：" + js.msg;
-      btnSend.disabled = false;
-      btnSend.innerText = "重新送出";
-      btnSend.style.background = "#ffc107";
-    }
+  .then(() => {
+    // 這裡讀不到 response.json()，只能假設成功
+    msg.textContent = "✅ 資料已送出！請到試算表確認。";
+    btnSend.innerText = "關閉視窗";
+    btnSend.onclick   = () => liff.closeWindow();
   })
   .catch(err => {
-    console.error("winner fetch 發生錯誤:", err);
-    alert("fetch 失敗：" + err);
+    console.error("送出失敗:", err);
+    alert("網路問題或伺服器錯誤");
     btnSend.disabled = false;
     btnSend.innerText = "重新送出";
     btnSend.style.background = "#ffc107";
   });
 };
+
 
 </script>
 </body>
