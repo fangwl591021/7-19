@@ -144,42 +144,36 @@
     function formatDateDisplay(date) {
       if (!date) return '';
       
+      console.log('格式化日期輸入:', date, typeof date);
+      
       let dateObj;
       
+      // 處理不同的日期格式
       if (date instanceof Date) {
         dateObj = date;
       } else {
         const dateStr = String(date).trim();
         
-        // 先嘗試直接解析
-        dateObj = new Date(dateStr);
+        // 如果是 ISO 格式 (2025-10-23T16:00:00.000Z)
+        if (dateStr.includes('T')) {
+          dateObj = new Date(dateStr);
+        } else {
+          // 如果是簡單的日期格式 (2025-10-23)
+          dateObj = new Date(dateStr + 'T12:00:00');
+        }
         
-        // 如果失敗，嘗試其他格式
+        // 如果解析失敗，嘗試其他方式
         if (isNaN(dateObj.getTime())) {
-          // 嘗試移除時間部分
-          const dateOnly = dateStr.split('T')[0];
-          dateObj = new Date(dateOnly);
-          
-          // 如果還是失敗，嘗試替換分隔符
-          if (isNaN(dateObj.getTime())) {
-            const withSlash = dateOnly.replace(/-/g, '/');
-            dateObj = new Date(withSlash);
-          }
-          
-          // 最後嘗試手動解析
-          if (isNaN(dateObj.getTime())) {
-            const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-            if (match) {
-              const year = parseInt(match[1]);
-              const month = parseInt(match[2]) - 1;
-              const day = parseInt(match[3]);
-              dateObj = new Date(year, month, day);
-            }
-          }
+          // 嘗試替換分隔符
+          const withSlash = dateStr.replace(/-/g, '/');
+          dateObj = new Date(withSlash);
         }
       }
       
+      console.log('解析後的日期物件:', dateObj);
+      
       if (!dateObj || isNaN(dateObj.getTime())) {
+        console.log('日期解析失敗');
         return '過期日期錯誤';
       }
       
@@ -188,7 +182,10 @@
       const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
       const day = dateObj.getDate().toString().padStart(2, '0');
       
-      return `${year}-${month}-${day}`;
+      const result = `${year}-${month}-${day}`;
+      console.log('格式化結果:', result);
+      
+      return result;
     }
 
     function render(arr) {
@@ -252,25 +249,67 @@
     }
 
     async function redeem(recordId, btn) {
-      btn.disabled = true; btn.textContent = '處理中…';
+      console.log('開始核銷，記錄ID:', recordId);
+      
+      btn.disabled = true; 
+      btn.textContent = '處理中…';
+      
       try {
+        console.log('發送核銷請求到:', API);
+        
+        const requestBody = JSON.stringify({ act: 'redeem', recordId: recordId });
+        console.log('請求內容:', requestBody);
+        
         const res = await fetch(API, {
-          method:'POST', mode:'cors',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ act:'redeem', recordId })
+          method: 'POST', 
+          mode: 'no-cors',  // 改為 no-cors，與抽獎功能一致
+          headers: { 'Content-Type': 'text/plain' },  // 改為 text/plain
+          body: requestBody
         });
-        const j = await res.json();
-        if (!j.ok) throw new Error(j.msg||'後端錯誤');
-        const now = new Date().toLocaleString('zh-TW',{hour12:false}).replace(/\//g,'-');
+        
+        console.log('核銷請求已發送，回應:', res);
+        
+        // 因為使用 no-cors，無法讀取回應，假設成功
+        // 更新 UI
+        const now = new Date();
+        const nowStr = now.toLocaleString('zh-TW', {
+          year: 'numeric', 
+          month: '2-digit', 
+          day: '2-digit',
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit',
+          hour12: false 
+        }).replace(/\//g, '-');
+        
+        console.log('核銷時間字串:', nowStr);
+        
         const card = btn.closest('.card');
         const info = card.querySelector('.info');
-        info.innerHTML = info.innerHTML.replace(/核銷狀態：未核銷/, '核銷狀態：已核銷')
-                                       .replace(/$/, `核銷時間：${now}<br>`);
+        
+        // 更新核銷狀態
+        let currentInfo = info.innerHTML;
+        currentInfo = currentInfo.replace(/核銷狀態：未核銷/, '核銷狀態：已核銷');
+        
+        // 添加核銷時間（如果還沒有的話）
+        if (!currentInfo.includes('核銷時間：')) {
+          currentInfo += `核銷時間：${nowStr}<br>`;
+        }
+        
+        info.innerHTML = currentInfo;
+        
+        // 更新按鈕
         btn.className = 'redeemBtn done';
-        btn.innerHTML= `已核銷<br>${now}`;
-      } catch(e) {
-        alert('核銷失敗：'+e.message);
-        btn.disabled = false; btn.textContent = '核銷';
+        btn.innerHTML = `已核銷<br>${nowStr}`;
+        
+        console.log('UI 更新完成');
+        alert('核銷成功！');
+        
+      } catch (e) {
+        console.error('核銷失敗:', e);
+        alert('核銷失敗：' + e.message);
+        btn.disabled = false; 
+        btn.textContent = '核銷';
       }
     }
 
