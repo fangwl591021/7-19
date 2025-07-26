@@ -41,7 +41,7 @@
 const LIFF_ID = "1656871455-A1lEEOaB"; 
 
 // **重要：請務必將此處的 API 網址替換為您最新部署 Apps Script 時獲取到的「網路應用程式網址」**
-const API     = "https://script.google.com/macros/s/AKfycbzHk7AEyp7yUnCdH8yI1Uqwj4876ix1gMG7pZ6gqVEZ5Ey7Y2uKA99DHzueqkfQghCr/exec"; 
+const API     = "https://script.google.com/macros/s/AKfycbwCjaOECHm9Ck4vVw4gHtbgeqkls9Nz7jyh_saNHBz2o8JqyAiZcJpcrWC0CpoQ0Bl3/exec"; 
 
 let uid="", uname="";
 const btnPlay=document.getElementById("play"),
@@ -90,10 +90,12 @@ const btnPlay=document.getElementById("play"),
 
 // 新增：初始化時檢查每日限制
 async function checkDailyLimitOnInit() {
-  console.log('檢查每日限制，用戶ID:', uid);
+  console.log('=== 開始檢查每日限制 ===');
+  console.log('用戶ID:', uid);
+  console.log('API 網址:', API);
   
   if (!uid) {
-    console.error('用戶ID不存在');
+    console.error('❌ 用戶ID不存在');
     btnPlay.textContent = "用戶驗證失敗";
     btnPlay.disabled = true;
     errorMsg.textContent = "用戶驗證失敗，請重新開啟";
@@ -107,42 +109,57 @@ async function checkDailyLimitOnInit() {
     
     // 發送檢查請求
     const checkBody = JSON.stringify({act:"checkDaily", userId:uid});
-    console.log('發送每日限制檢查請求:', checkBody);
+    console.log('📤 發送檢查請求:', checkBody);
     
-    const checkResponse = await fetch(API,{
+    const checkResponse = await fetch(API, {
       method:"POST", 
       mode:"cors",
-      headers:{"Content-Type":"application/json"},
+      headers:{
+        "Content-Type":"application/json",
+        "Accept": "application/json"
+      },
       body: checkBody
     });
     
-    console.log('檢查回應狀態:', checkResponse.status);
+    console.log('📥 檢查回應狀態:', checkResponse.status, checkResponse.statusText);
     
-    if (checkResponse.ok) {
-      const checkResult = await checkResponse.json();
-      console.log('每日限制檢查結果:', checkResult);
+    if (!checkResponse.ok) {
+      throw new Error(`HTTP ${checkResponse.status}: ${checkResponse.statusText}`);
+    }
+    
+    const responseText = await checkResponse.text();
+    console.log('📄 原始回應內容:', responseText);
+    
+    let checkResult;
+    try {
+      checkResult = JSON.parse(responseText);
+      console.log('✅ JSON 解析成功:', checkResult);
+    } catch (parseError) {
+      console.error('❌ JSON 解析失敗:', parseError);
+      throw new Error('伺服器回應格式錯誤');
+    }
+    
+    // 檢查結果
+    if (!checkResult.success && checkResult.msg && checkResult.msg.includes('今日已玩過')) {
+      // 今日已玩過，禁用遊戲
+      console.log('🚫 用戶今日已玩過，禁用遊戲');
+      btnPlay.textContent = "今日已玩過";
+      btnPlay.disabled = true;
+      errorMsg.textContent = "您今日已玩過，請明日再來試手氣！";
+      errorMsg.style.display = "block";
       
-      if (!checkResult.success && checkResult.msg && checkResult.msg.includes('今日已玩過')) {
-        // 今日已玩過，禁用遊戲
-        console.log('用戶今日已玩過，禁用遊戲');
-        btnPlay.textContent = "今日已玩過";
-        btnPlay.disabled = true;
-        errorMsg.textContent = "您今日已玩過，請明日再來試手氣！";
-        errorMsg.style.display = "block";
-        
-        // 顯示返回按鈕
-        setTimeout(() => {
-          btnPlay.textContent = "返回";
-          btnPlay.disabled = false;
-          btnPlay.onclick = () => liff.closeWindow();
-        }, 2000);
-        
-        return;
-      }
+      // 顯示返回按鈕
+      setTimeout(() => {
+        btnPlay.textContent = "返回";
+        btnPlay.disabled = false;
+        btnPlay.onclick = () => liff.closeWindow();
+      }, 3000);
+      
+      return;
     }
     
     // 檢查通過，允許遊戲
-    console.log('每日限制檢查通過，允許遊戲');
+    console.log('✅ 每日限制檢查通過，允許遊戲');
     btnPlay.textContent = "開始遊戲";
     btnPlay.disabled = false;
     
@@ -150,13 +167,26 @@ async function checkDailyLimitOnInit() {
     btnPlay.onclick = startGame;
     
   } catch (e) {
-    console.error('每日限制檢查失敗:', e);
+    console.error('❌ 每日限制檢查失敗:', e);
     
-    // 檢查失敗時，為了用戶體驗，允許遊戲但顯示警告
-    console.log('檢查失敗，但允許遊戲繼續');
-    btnPlay.textContent = "開始遊戲";
+    // 檢查失敗時的處理
+    if (e.message.includes('Failed to fetch')) {
+      console.log('⚠️ 網路問題，允許遊戲但記錄錯誤');
+      btnPlay.textContent = "開始遊戲（網路檢查失敗）";
+    } else {
+      console.log('⚠️ 其他錯誤，允許遊戲但記錄錯誤');
+      btnPlay.textContent = "開始遊戲（檢查失敗）";
+    }
+    
     btnPlay.disabled = false;
     btnPlay.onclick = startGame;
+    
+    // 顯示警告
+    errorMsg.textContent = "無法驗證每日限制，如果您今日已玩過，請勿重複遊戲";
+    errorMsg.style.display = "block";
+    setTimeout(() => {
+      errorMsg.style.display = "none";
+    }, 5000);
   }
 }
 
