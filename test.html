@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API 測試</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #cce7ff; color: #004085; }
+        button { padding: 10px 20px; font-size: 16px; margin: 5px; }
+        #log { background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; max-height: 400px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔧 API 連通性測試</h1>
+    
+    <div>
+        <label>API 網址:</label><br>
+        <input type="text" id="apiUrl" style="width: 100%; padding: 5px; margin: 5px 0;" 
+               placeholder="https://script.google.com/macros/s/YOUR_ID/exec">
+    </div>
+    
+    <div>
+        <button onclick="testGet()">測試 GET 請求</button>
+        <button onclick="testPost()">測試 POST 請求</button>
+        <button onclick="testCheckDaily()">測試每日檢查</button>
+        <button onclick="clearLog()">清除記錄</button>
+    </div>
+    
+    <div id="results"></div>
+    <div id="log"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div class="${type}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function showResult(message, isSuccess) {
+            const resultsDiv = document.getElementById('results');
+            const resultClass = isSuccess ? 'success' : 'error';
+            resultsDiv.innerHTML = `<div class="test-result ${resultClass}">${message}</div>`;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testGet() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            if (!apiUrl) {
+                showResult('請先輸入 API 網址', false);
+                return;
+            }
+
+            log('開始測試 GET 請求...');
+            log('API 網址: ' + apiUrl);
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+
+                log('回應狀態: ' + response.status + ' ' + response.statusText);
+
+                if (response.ok) {
+                    const data = await response.text();
+                    log('回應內容: ' + data);
+                    showResult('✅ GET 請求成功！', true);
+                } else {
+                    log('❌ GET 請求失敗: ' + response.status);
+                    showResult('❌ GET 請求失敗: ' + response.status, false);
+                }
+
+            } catch (error) {
+                log('❌ GET 請求錯誤: ' + error.message);
+                showResult('❌ GET 請求錯誤: ' + error.message, false);
+            }
+        }
+
+        async function testPost() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            if (!apiUrl) {
+                showResult('請先輸入 API 網址', false);
+                return;
+            }
+
+            log('開始測試基本 POST 請求...');
+            
+            const testData = {
+                act: 'test',
+                message: 'hello'
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                log('回應狀態: ' + response.status + ' ' + response.statusText);
+
+                if (response.ok) {
+                    const data = await response.text();
+                    log('回應內容: ' + data);
+                    showResult('✅ POST 請求成功！', true);
+                } else {
+                    log('❌ POST 請求失敗: ' + response.status);
+                    showResult('❌ POST 請求失敗: ' + response.status, false);
+                }
+
+            } catch (error) {
+                log('❌ POST 請求錯誤: ' + error.message);
+                showResult('❌ POST 請求錯誤: ' + error.message, false);
+            }
+        }
+
+        async function testCheckDaily() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            if (!apiUrl) {
+                showResult('請先輸入 API 網址', false);
+                return;
+            }
+
+            log('開始測試每日檢查 API...');
+            
+            const checkData = {
+                act: 'checkDaily',
+                userId: 'test-user-123'
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(checkData)
+                });
+
+                log('回應狀態: ' + response.status + ' ' + response.statusText);
+
+                if (response.ok) {
+                    const responseText = await response.text();
+                    log('原始回應: ' + responseText);
+                    
+                    try {
+                        const data = JSON.parse(responseText);
+                        log('解析後的 JSON: ' + JSON.stringify(data, null, 2));
+                        
+                        if (data.success !== undefined) {
+                            showResult('✅ 每日檢查 API 正常運作！回應: ' + data.msg, true);
+                        } else {
+                            showResult('⚠️ API 回應格式異常', false);
+                        }
+                    } catch (parseError) {
+                        log('❌ JSON 解析失敗: ' + parseError.message);
+                        showResult('❌ API 回應不是有效的 JSON', false);
+                    }
+                } else {
+                    log('❌ 每日檢查請求失敗: ' + response.status);
+                    showResult('❌ 每日檢查請求失敗: ' + response.status, false);
+                }
+
+            } catch (error) {
+                log('❌ 每日檢查錯誤: ' + error.message);
+                showResult('❌ 每日檢查錯誤: ' + error.message, false);
+            }
+        }
+
+        // 頁面載入時的初始化
+        window.addEventListener('load', function() {
+            log('API 測試工具已載入');
+            log('請輸入您的 Google Apps Script API 網址進行測試');
+        });
+    </script>
+</body>
+</html>
