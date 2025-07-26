@@ -57,60 +57,61 @@ const btnPlay=document.getElementById("play"),
 
 (async()=>{
   try {
+    console.log('開始 LIFF 初始化...');
     await liff.init({liffId:LIFF_ID});
+    
+    // 檢查登入狀態
     if(!liff.isLoggedIn()){ 
+      console.log('用戶未登入，跳轉到登入頁面');
       liff.login(); 
       return; 
     }
-    const profile=await liff.getProfile();
-    uid=profile.userId;
-    uname=profile.displayName;
     
-    console.log('LIFF 初始化成功，用戶ID:', uid);
+    console.log('用戶已登入，取得用戶資料');
+    const profile = await liff.getProfile();
+    uid = profile.userId;
+    uname = profile.displayName;
     
-    btnPlay.disabled=false;
-    btnPlay.textContent="開始遊戲";
+    console.log('用戶資料:', { uid: uid, uname: uname });
+    
+    // *** 登入成功後立即檢查每日限制 ***
+    await checkDailyLimitOnInit();
+    
   } catch (error) {
     console.error('LIFF 初始化失敗:', error);
     
-    // 如果LIFF失敗，使用測試模式
-    uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b'; // 使用已知的測試ID
-    uname = 'Test User';
-    
-    console.log('使用測試模式，用戶ID:', uid);
-    
-    btnPlay.disabled=false;
-    btnPlay.textContent="開始遊戲（測試模式）";
+    // 如果LIFF完全失敗，顯示錯誤訊息
+    btnPlay.textContent = "系統錯誤";
+    btnPlay.disabled = true;
+    errorMsg.textContent = "系統初始化失敗，請重新開啟";
+    errorMsg.style.display = "block";
   }
 })();
 
-btnPlay.onclick=async ()=>{
-  // 重置錯誤訊息
-  errorMsg.style.display="none";
-  msg.textContent="";
-  
-  // *** 首先檢查每日限制，在遊戲開始前就檢查 ***
+// 新增：初始化時檢查每日限制
+async function checkDailyLimitOnInit() {
   console.log('檢查每日限制，用戶ID:', uid);
   
-  // 確保用戶ID存在
   if (!uid) {
     console.error('用戶ID不存在');
+    btnPlay.textContent = "用戶驗證失敗";
+    btnPlay.disabled = true;
     errorMsg.textContent = "用戶驗證失敗，請重新開啟";
     errorMsg.style.display = "block";
     return;
   }
   
   try {
-    btnPlay.disabled = true;
     btnPlay.textContent = "檢查中...";
+    btnPlay.disabled = true;
     
     // 發送檢查請求
     const checkBody = JSON.stringify({act:"checkDaily", userId:uid});
-    console.log('發送檢查請求:', checkBody);
+    console.log('發送每日限制檢查請求:', checkBody);
     
     const checkResponse = await fetch(API,{
       method:"POST", 
-      mode:"cors", // 使用 cors 以便讀取回應
+      mode:"cors",
       headers:{"Content-Type":"application/json"},
       body: checkBody
     });
@@ -119,15 +120,15 @@ btnPlay.onclick=async ()=>{
     
     if (checkResponse.ok) {
       const checkResult = await checkResponse.json();
-      console.log('檢查結果:', checkResult);
+      console.log('每日限制檢查結果:', checkResult);
       
       if (!checkResult.success && checkResult.msg && checkResult.msg.includes('今日已玩過')) {
-        // 顯示每日限制訊息
-        errorMsg.textContent = "您今日已玩過，請明日再來試手氣！";
-        errorMsg.style.display = "block";
-        
+        // 今日已玩過，禁用遊戲
+        console.log('用戶今日已玩過，禁用遊戲');
         btnPlay.textContent = "今日已玩過";
         btnPlay.disabled = true;
+        errorMsg.textContent = "您今日已玩過，請明日再來試手氣！";
+        errorMsg.style.display = "block";
         
         // 顯示返回按鈕
         setTimeout(() => {
@@ -136,28 +137,45 @@ btnPlay.onclick=async ()=>{
           btnPlay.onclick = () => liff.closeWindow();
         }, 2000);
         
-        return; // 停止遊戲，不允許繼續
+        return;
       }
     }
     
-    // 如果檢查通過，繼續遊戲
-    console.log('每日限制檢查通過，開始遊戲');
+    // 檢查通過，允許遊戲
+    console.log('每日限制檢查通過，允許遊戲');
+    btnPlay.textContent = "開始遊戲";
+    btnPlay.disabled = false;
+    
+    // 設定遊戲開始按鈕事件
+    btnPlay.onclick = startGame;
     
   } catch (e) {
-    console.log('每日限制檢查失敗，但允許繼續遊戲:', e);
-    // 如果檢查失敗，為了用戶體驗，允許繼續遊戲
+    console.error('每日限制檢查失敗:', e);
+    
+    // 檢查失敗時，為了用戶體驗，允許遊戲但顯示警告
+    console.log('檢查失敗，但允許遊戲繼續');
+    btnPlay.textContent = "開始遊戲";
+    btnPlay.disabled = false;
+    btnPlay.onclick = startGame;
   }
+}
+
+// 遊戲開始函數
+function startGame() {
+  console.log('開始遊戲');
   
-  // 恢復按鈕狀態並開始遊戲
-  btnPlay.textContent = "遊戲開始";
+  // 重置錯誤訊息
+  errorMsg.style.display="none";
+  msg.textContent="";
   
-  winSound.load(); loseSound.load();
+  winSound.load(); 
+  loseSound.load();
   btnPlay.style.display="none";
   mv.style.display="block";
   mv.currentTime=0;
   mv.play();
   setTimeout(()=>mv.pause(),7000); // 影片播放 7 秒後暫停
-};
+}
 
 mv.onpause=async ()=>{
   mv.style.display="none";
