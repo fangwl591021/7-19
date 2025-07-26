@@ -12,7 +12,6 @@
     .card h3 { margin:0 0 8px; color:#fff; }
     .info { font-size:.9em; line-height:1.4; }
     .expiry-date { color: #ff5555; font-weight: bold; }
-    .expiry-date.valid { color: #55ff55; }
     .redeemBtn { width:100%; padding:10px; margin-top:8px; border:none; border-radius:6px;
                  background:#ffc107; color:#000; font-size:1em; }
     .redeemBtn.done { background:#666; color:#bbb; cursor:not-allowed; }
@@ -60,53 +59,9 @@
 
     function formatDateDisplay(date) {
       if (!date) return '';
-      
-      // 處理各種可能的日期格式
-      let dateObj;
-      
-      if (date instanceof Date) {
-        dateObj = date;
-      } else {
-        const dateStr = String(date).trim();
-        
-        // 嘗試多種日期格式
-        const formats = [
-          dateStr,
-          dateStr.replace(/-/g, '/'),
-          dateStr.replace(/T.*$/, ''), // 移除時間部分
-          dateStr.split('T')[0], // 只取日期部分
-        ];
-        
-        for (const format of formats) {
-          const testDate = new Date(format);
-          if (!isNaN(testDate.getTime())) {
-            dateObj = testDate;
-            break;
-          }
-        }
-        
-        // 如果還是無法解析，嘗試手動解析 YYYY-MM-DD 格式
-        if (!dateObj) {
-          const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-          if (match) {
-            const year = parseInt(match[1]);
-            const month = parseInt(match[2]) - 1; // JavaScript 月份從 0 開始
-            const day = parseInt(match[3]);
-            dateObj = new Date(year, month, day);
-          }
-        }
-      }
-      
-      if (!dateObj || isNaN(dateObj.getTime())) {
-        return '日期格式錯誤';
-      }
-      
-      // 格式化為 YYYY-MM-DD
-      const year = dateObj.getFullYear();
-      const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-      const day = dateObj.getDate().toString().padStart(2, '0');
-      
-      return `${year}-${month}-${day}`;
+      date = new Date(String(date).replace(/-/g,'/'));
+      if (isNaN(date)) return '無效日期';
+      return date.toISOString().slice(0,10);
     }
 
     function render(arr) {
@@ -119,23 +74,13 @@
       list.innerHTML = arr.map(o => {
         let isExpired = false;
         let expDisp = '無過期時間';
-        let expClass = 'expiry-date';
-        
         if (o.expiryTime) {
-          expDisp = formatDateDisplay(o.expiryTime);
-          
-          // 如果日期格式正確，檢查是否過期
-          if (expDisp !== '日期格式錯誤' && expDisp !== '') {
-            const expiryDate = new Date(expDisp + 'T23:59:59'); // 設為當天最後一刻
-            if (expiryDate < now) {
-              isExpired = true;
-              expClass = 'expiry-date'; // 紅色 - 已過期
-            } else {
-              expClass = 'expiry-date valid'; // 綠色 - 未過期
-            }
-          }
+          const d = new Date(String(o.expiryTime).replace(/-/g,'/'));
+          if (!isNaN(d)) {
+            expDisp = formatDateDisplay(d);
+            if (d < now) isExpired = true;
+          } else expDisp = '過期日期錯誤';
         }
-        
         let btnHtml;
         if (o.redeemed==='是') {
           btnHtml = `<button class="redeemBtn done" disabled>已核銷<br>${o.redeemTime}</button>`;
@@ -150,7 +95,7 @@
             <div class="info">
               店家名稱：${o.storeName || 'N/A'}<br>
               中獎時間：${o.winTime || 'N/A'}<br>
-              過期時間：<span class="${expClass}">${expDisp}</span><br>
+              過期時間：<span class="expiry-date">${expDisp}</span><br>
               核銷狀態：${o.redeemed==='是'?'已核銷':'未核銷'}<br>
               ${o.redeemed==='是'?`核銷時間：${o.redeemTime}<br>`:''}
             </div>
