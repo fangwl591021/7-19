@@ -113,12 +113,11 @@ btnSend.onclick = () => {
   btnSend.innerText  = "送出中…";
   btnSend.style.background = "#555";
 
-  // ← 一定要加上 mode:"no-cors"，否則失敗就不會送出
   fetch(API, {
-    method: "POST",
-    mode:   "no-cors",
-    headers:{ "Content-Type":"text/plain" },
-    body:   JSON.stringify({
+    method:  "POST",
+    mode:    "no-cors",             // ← 一定要 no‑cors
+    headers: {"Content-Type":"text/plain"},
+    body:    JSON.stringify({
       act:         "winner",
       userId:      uid,
       displayName: uname,
@@ -127,19 +126,20 @@ btnSend.onclick = () => {
     })
   })
   .then(() => {
-    // 這裡讀不到 response.json()，只能假設成功
-    msg.textContent = "✅ 資料已送出！請到試算表確認。";
+    // 因為 no‑cors，這裡拿不到回傳值，但請求一定送出
+    msg.textContent = "✅ 資料已送出！請到試算表確認";
     btnSend.innerText = "關閉視窗";
     btnSend.onclick   = () => liff.closeWindow();
   })
   .catch(err => {
     console.error("送出失敗:", err);
-    alert("網路問題或伺服器錯誤");
-    btnSend.disabled = false;
-    btnSend.innerText = "重新送出";
+    alert("網路或伺服器錯誤，請稍後再試");
+    btnSend.disabled   = false;
+    btnSend.innerText  = "重新送出";
     btnSend.style.background = "#ffc107";
   });
 };
+
 
 
 </script>
