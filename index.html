@@ -56,22 +56,100 @@ const btnPlay=document.getElementById("play"),
       loseSound=document.getElementById("loseSound");
 
 (async()=>{
-  await liff.init({liffId:LIFF_ID});
-  if(!liff.isLoggedIn()){ 
-    liff.login(); 
-    return; 
+  try {
+    await liff.init({liffId:LIFF_ID});
+    if(!liff.isLoggedIn()){ 
+      liff.login(); 
+      return; 
+    }
+    const profile=await liff.getProfile();
+    uid=profile.userId;
+    uname=profile.displayName;
+    
+    console.log('LIFF 初始化成功，用戶ID:', uid);
+    
+    btnPlay.disabled=false;
+    btnPlay.textContent="開始遊戲";
+  } catch (error) {
+    console.error('LIFF 初始化失敗:', error);
+    
+    // 如果LIFF失敗，使用測試模式
+    uid = 'Udb7c5578b402bf6f1e0f7065fc57c17b'; // 使用已知的測試ID
+    uname = 'Test User';
+    
+    console.log('使用測試模式，用戶ID:', uid);
+    
+    btnPlay.disabled=false;
+    btnPlay.textContent="開始遊戲（測試模式）";
   }
-  const profile=await liff.getProfile();
-  uid=profile.userId;
-  uname=profile.displayName;
-  btnPlay.disabled=false;
-  btnPlay.textContent="開始遊戲";
 })();
 
-btnPlay.onclick=()=>{
+btnPlay.onclick=async ()=>{
   // 重置錯誤訊息
   errorMsg.style.display="none";
   msg.textContent="";
+  
+  // *** 首先檢查每日限制，在遊戲開始前就檢查 ***
+  console.log('檢查每日限制，用戶ID:', uid);
+  
+  // 確保用戶ID存在
+  if (!uid) {
+    console.error('用戶ID不存在');
+    errorMsg.textContent = "用戶驗證失敗，請重新開啟";
+    errorMsg.style.display = "block";
+    return;
+  }
+  
+  try {
+    btnPlay.disabled = true;
+    btnPlay.textContent = "檢查中...";
+    
+    // 發送檢查請求
+    const checkBody = JSON.stringify({act:"checkDaily", userId:uid});
+    console.log('發送檢查請求:', checkBody);
+    
+    const checkResponse = await fetch(API,{
+      method:"POST", 
+      mode:"cors", // 使用 cors 以便讀取回應
+      headers:{"Content-Type":"application/json"},
+      body: checkBody
+    });
+    
+    console.log('檢查回應狀態:', checkResponse.status);
+    
+    if (checkResponse.ok) {
+      const checkResult = await checkResponse.json();
+      console.log('檢查結果:', checkResult);
+      
+      if (!checkResult.success && checkResult.msg && checkResult.msg.includes('今日已玩過')) {
+        // 顯示每日限制訊息
+        errorMsg.textContent = "您今日已玩過，請明日再來試手氣！";
+        errorMsg.style.display = "block";
+        
+        btnPlay.textContent = "今日已玩過";
+        btnPlay.disabled = true;
+        
+        // 顯示返回按鈕
+        setTimeout(() => {
+          btnPlay.textContent = "返回";
+          btnPlay.disabled = false;
+          btnPlay.onclick = () => liff.closeWindow();
+        }, 2000);
+        
+        return; // 停止遊戲，不允許繼續
+      }
+    }
+    
+    // 如果檢查通過，繼續遊戲
+    console.log('每日限制檢查通過，開始遊戲');
+    
+  } catch (e) {
+    console.log('每日限制檢查失敗，但允許繼續遊戲:', e);
+    // 如果檢查失敗，為了用戶體驗，允許繼續遊戲
+  }
+  
+  // 恢復按鈕狀態並開始遊戲
+  btnPlay.textContent = "遊戲開始";
   
   winSound.load(); loseSound.load();
   btnPlay.style.display="none";
@@ -89,34 +167,22 @@ mv.onpause=async ()=>{
   
   console.log('抽獎結果:', win ? 'WIN' : 'MISS');
   
-  // 發送抽獎結果到後端（包含每日限制檢查）
+  // 發送抽獎結果到後端（此時已通過每日限制檢查）
   try {
+    const drawBody = JSON.stringify({act:"draw", userId:uid, displayName:uname, result:win?"WIN":"MISS"});
+    console.log('發送抽獎記錄:', drawBody);
+    
     const drawResponse = await fetch(API,{
       method:"POST", 
       mode:"no-cors",
       headers:{"Content-Type":"text/plain"},
-      body:JSON.stringify({act:"draw",userId:uid,displayName:uname,result:win?"WIN":"MISS"})
+      body: drawBody
     });
     
     console.log('抽獎記錄已發送');
     
   } catch (e) {
     console.error("發送抽獎紀錄失敗:", e);
-    
-    // 如果是每日限制的錯誤，特別處理
-    if (e.message && e.message.includes('今日已玩過')) {
-      errorMsg.textContent = "您今日已玩過，請明日再來試手氣！";
-      errorMsg.style.display = "block";
-      
-      // 顯示返回按鈕
-      setTimeout(() => {
-        btnPlay.style.display = "block";
-        btnPlay.textContent = "返回";
-        btnPlay.onclick = () => liff.closeWindow();
-      }, 2000);
-      
-      return; // 停止後續處理
-    }
   }
   
   // 顯示抽獎結果
