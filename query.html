@@ -140,28 +140,17 @@
       window.open(testUrl, '_blank');
     }
 
-    // 簡化的日期時間格式化函數 - 直接顯示原始內容
+    // 直接顯示原始時間，不做任何格式化處理
     function formatDateTimeDisplay(dateTime) {
       if (!dateTime) return '';
       
-      console.log('格式化日期時間輸入:', dateTime, typeof dateTime);
+      console.log('原始時間輸入:', dateTime);
       
-      const dateStr = String(dateTime).trim();
+      // 完全不處理，直接返回原始值
+      const result = String(dateTime).trim();
+      console.log('直接返回原始值:', result);
       
-      // 如果是 ISO 格式 (2025-07-26T10:09:22.000Z)，提取時間部分
-      if (dateStr.includes('T')) {
-        const parts = dateStr.split('T');
-        const datePart = parts[0]; // 2025-07-26
-        const timePart = parts[1].replace('Z', '').replace(/\.\d{3}$/, ''); // 10:09:22
-        
-        const result = `${datePart} ${timePart}`;
-        console.log('格式化結果:', result);
-        return result;
-      }
-      
-      // 如果已經是正確格式，直接返回
-      console.log('直接返回原始格式:', dateStr);
-      return dateStr;
+      return result;
     }
 
     function formatDateDisplay(date) {
@@ -296,6 +285,8 @@
               店家名稱：${o.storeName || 'N/A'}<br>
               中獎時間：${winTimeDisplay}<br>
               過期時間：<span class="${expClass}">${expDisp}</span><br>
+              ${o.storeLocation ? `到店兌換：<a href="${o.storeLocation}" target="_blank" style="color:#ffd700;">🗺️ 查看地圖</a><br>` : ''}
+              ${o.onlineContact ? `線上聯繫：<a href="${o.onlineContact}" target="_blank" style="color:#ffd700;">💬 LINE聯繫</a><br>` : ''}
               核銷狀態：${o.redeemed==='是'?'已核銷':'未核銷'}<br>
               ${o.redeemed==='是'?`核銷時間：${formatDateTimeDisplay(o.redeemTime)}<br>`:''}
             </div>
@@ -334,7 +325,7 @@
         console.log('核銷請求已發送，回應:', res);
         
         // 因為使用 no-cors，無法讀取回應，假設成功
-        // 更新 UI - 使用台灣時間
+        // 更新 UI - 使用簡單的時間格式
         const now = new Date();
         const nowStr = now.toLocaleString('zh-TW', {
           year: 'numeric', 
@@ -343,8 +334,7 @@
           hour: '2-digit', 
           minute: '2-digit', 
           second: '2-digit',
-          hour12: false,
-          timeZone: 'Asia/Taipei'  // 明確指定台灣時區
+          hour12: false
         }).replace(/\//g, '-');
         
         console.log('核銷時間字串:', nowStr);
