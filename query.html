@@ -28,7 +28,45 @@
 
   <script>
     const LIFF_ID = '1656871455-Np5YYVlv'; // 您的 LIFF ID
-    const API     = 'https://script.google.com/macros/s/AKfycbyW6yxXZ6rA0bHeDaVf1WxdkDG7Agrsojqun5sBShzKW26-QZiiuYXKvVVPo2qsZzsO/exec';
+    const API     = '// 恢復原始版本
+function getRecords(uid) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sh = ss.getSheetByName(WIN_SHEET);
+  if (!sh) return [];
+  
+  const all = sh.getDataRange().getValues();
+  if (all.length < 2) return [];
+  const hdr = all.shift();
+  
+  const ix = {
+    user: hdr.indexOf('LINE ID'),
+    prize: hdr.indexOf('中獎券名稱'),
+    winTime: hdr.indexOf('中獎時間'),
+    drawDate: hdr.indexOf('抽獎日期'),
+    expiry: hdr.indexOf('過期時間'),
+    redeemed: hdr.indexOf('是否核銷'),
+    redeemTime: hdr.indexOf('核銷時間'),
+    store: hdr.indexOf('店家名稱')
+  };
+  
+  const userRecords = [];
+  all.forEach(function(row, i) {
+    if (row[ix.user] === uid) {
+      userRecords.push({
+        recordId: i + 2,
+        prize: row[ix.prize] || '',
+        winTime: row[ix.winTime] || '',
+        drawDate: row[ix.drawDate] || '',
+        expiryTime: row[ix.expiry] || '',
+        redeemed: row[ix.redeemed] || '否',
+        redeemTime: row[ix.redeemTime] || '',
+        storeName: row[ix.store] || ''
+      });
+    }
+  });
+  
+  return userRecords;
+}';
 
     async function init() {
       // 檢查是否在短時間內重複載入
